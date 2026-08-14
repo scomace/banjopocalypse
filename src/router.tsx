@@ -17,6 +17,11 @@ const ComicExclaimLab = lazy(() =>
     default: m.ComicExclaimLab,
   })),
 );
+const BakerLab = lazy(() =>
+  import("./screens/admin-baker/BakerLab").then((m) => ({
+    default: m.BakerLab,
+  })),
+);
 
 function AdminLoading() {
   return (
@@ -37,6 +42,16 @@ export function AppRouter() {
             <div className="admin-root">
               <Suspense fallback={<AdminLoading />}>
                 <AaCharAdmin />
+              </Suspense>
+            </div>
+          }
+        />
+        <Route
+          path="/admin/baker"
+          element={
+            <div className="admin-root">
+              <Suspense fallback={<AdminLoading />}>
+                <BakerLab />
               </Suspense>
             </div>
           }
