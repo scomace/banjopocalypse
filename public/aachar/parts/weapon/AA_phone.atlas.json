@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_phone.png",
+  "width": 16,
+  "height": 24,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 16,
+      "height": 24,
+      "pivot": {
+        "x": 0.46875,
+        "y": 0.3333333333333333
+      }
+    }
+  }
+}

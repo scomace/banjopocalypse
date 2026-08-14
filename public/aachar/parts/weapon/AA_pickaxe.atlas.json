@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_pickaxe.png",
+  "width": 28,
+  "height": 28,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 28,
+      "height": 28,
+      "pivot": {
+        "x": 0.21428571428571427,
+        "y": 0.2142857142857143
+      }
+    }
+  }
+}

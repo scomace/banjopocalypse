@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_moneybag.png",
+  "width": 20,
+  "height": 22,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 22,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.7727272727272727
+      }
+    }
+  }
+}

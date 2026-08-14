@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_mug.png",
+  "width": 20,
+  "height": 18,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 18,
+      "pivot": {
+        "x": 0.775,
+        "y": 0.4166666666666667
+      }
+    }
+  }
+}

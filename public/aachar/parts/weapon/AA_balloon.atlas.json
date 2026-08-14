@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_balloon.png",
+  "width": 20,
+  "height": 28,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 28,
+      "pivot": {
+        "x": 0.45,
+        "y": 0.17857142857142858
+      }
+    }
+  }
+}

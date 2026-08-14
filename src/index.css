@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@font-face {
+  font-family: "Badaboom";
+  src: url("/fonts/badaboom-bb.ttf") format("truetype");
+  font-display: swap;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: #120d08;
+  color: #eae0c6;
+  font-family: Verdana, Tahoma, sans-serif;
+  overflow: hidden;
+}
+
+/* Admin screens were authored on a light ground in the source repo. */
+.admin-root {
+  background: #f8fafc;
+  color: #0f172a;
+  min-height: 100vh;
+  overflow: auto;
+}

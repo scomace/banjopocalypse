@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_redtape.png",
+  "width": 32,
+  "height": 32,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 32,
+      "height": 32,
+      "pivot": {
+        "x": 0.453125,
+        "y": 0.375
+      }
+    }
+  }
+}

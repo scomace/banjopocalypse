@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_wand.png",
+  "width": 20,
+  "height": 24,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 24,
+      "pivot": {
+        "x": 0.2,
+        "y": 0.22916666666666666
+      }
+    }
+  }
+}

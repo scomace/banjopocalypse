@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_calculator.png",
+  "width": 18,
+  "height": 24,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 18,
+      "height": 24,
+      "pivot": {
+        "x": 0.4722222222222222,
+        "y": 0.25
+      }
+    }
+  }
+}

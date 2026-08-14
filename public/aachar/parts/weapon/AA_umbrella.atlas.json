@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_umbrella.png",
+  "width": 26,
+  "height": 28,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 26,
+      "height": 28,
+      "pivot": {
+        "x": 0.46153846153846156,
+        "y": 0.35714285714285715
+      }
+    }
+  }
+}

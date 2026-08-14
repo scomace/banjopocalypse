@@ -1,0 +1,17 @@
+{
+  "image": "/aachar/parts/hair/AA_bigpoofbun.png",
+  "width": 27,
+  "height": 38,
+  "regions": {
+    "Hair": {
+      "x": 1,
+      "y": 1,
+      "width": 25,
+      "height": 36,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2777777777777778
+      }
+    }
+  }
+}

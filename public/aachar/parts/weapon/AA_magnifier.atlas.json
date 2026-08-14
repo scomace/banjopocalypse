@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_magnifier.png",
+  "width": 24,
+  "height": 24,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 24,
+      "pivot": {
+        "x": 0.20833333333333334,
+        "y": 0.3333333333333333
+      }
+    }
+  }
+}

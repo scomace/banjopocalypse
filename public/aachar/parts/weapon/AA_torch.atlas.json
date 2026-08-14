@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_torch.png",
+  "width": 20,
+  "height": 26,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 20,
+      "height": 26,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.3076923076923077
+      }
+    }
+  }
+}

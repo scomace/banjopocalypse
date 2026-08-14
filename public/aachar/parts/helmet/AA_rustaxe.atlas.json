@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/helmet/AA_rustaxe.png",
+  "width": 177,
+  "height": 177,
+  "pixelDensity": 8.045454545454545,
+  "smooth": false,
+  "regions": {
+    "Helmet": {
+      "x": 0,
+      "y": 0,
+      "width": 177,
+      "height": 177,
+      "pivot": {
+        "x": 0.7272727272727272,
+        "y": -0.5454545454545452
+      }
+    }
+  }
+}

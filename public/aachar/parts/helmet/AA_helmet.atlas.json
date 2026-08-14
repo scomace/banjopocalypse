@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/helmet/AA_helmet.png",
+  "width": 30,
+  "height": 26,
+  "pixelDensity": 1.625,
+  "smooth": false,
+  "regions": {
+    "Helmet": {
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 26,
+      "pivot": {
+        "x": 0.44583333333333336,
+        "y": 0.25
+      }
+    }
+  }
+}

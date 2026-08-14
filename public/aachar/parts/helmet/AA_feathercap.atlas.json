@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/helmet/AA_feathercap.png",
+  "width": 30,
+  "height": 18,
+  "pixelDensity": 1.5,
+  "smooth": false,
+  "regions": {
+    "Helmet": {
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 18,
+      "pivot": {
+        "x": 0.5,
+        "y": 0
+      }
+    }
+  }
+}

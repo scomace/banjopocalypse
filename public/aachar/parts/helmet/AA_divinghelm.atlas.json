@@ -1,0 +1,17 @@
+{
+  "image": "/aachar/parts/helmet/AA_divinghelm.png",
+  "width": 34,
+  "height": 40,
+  "regions": {
+    "Helmet": {
+      "x": 1,
+      "y": 1,
+      "width": 32,
+      "height": 38,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.2368421052631579
+      }
+    }
+  }
+}

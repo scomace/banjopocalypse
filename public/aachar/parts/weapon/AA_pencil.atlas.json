@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_pencil.png",
+  "width": 28,
+  "height": 28,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 28,
+      "height": 28,
+      "pivot": {
+        "x": 0.4642857142857143,
+        "y": 0.5357142857142857
+      }
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "image": "/aachar/parts/faceHair/AA_braces.png",
+  "width": 16,
+  "height": 8,
+  "regions": {
+    "FaceHair": {
+      "x": 1,
+      "y": 1,
+      "width": 14,
+      "height": 6,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  }
+}

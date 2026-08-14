@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_sword.png",
+  "width": 28,
+  "height": 28,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 28,
+      "height": 28,
+      "pivot": {
+        "x": 0.19642857142857142,
+        "y": 0.30357142857142855
+      }
+    }
+  }
+}

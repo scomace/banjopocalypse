@@ -1,0 +1,17 @@
+{
+  "image": "/aachar/parts/hair/AA_braid.png",
+  "width": 27,
+  "height": 22,
+  "regions": {
+    "Hair": {
+      "x": 1,
+      "y": 1,
+      "width": 25,
+      "height": 20,
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  }
+}

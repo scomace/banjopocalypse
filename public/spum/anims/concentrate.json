@@ -1,0 +1,398 @@
+{
+  "name": "concentrate",
+  "duration": 0.5,
+  "fps": 60,
+  "tracks": {
+    "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm": {
+      "rot": [
+        {
+          "t": 0,
+          "rot": {
+            "x": 1.795,
+            "y": -1.077,
+            "z": -97.053
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.33333334,
+          "rot": {
+            "x": 1.413,
+            "y": -0.563,
+            "z": -78.607
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "rot": {
+            "x": 1.795,
+            "y": -1.077,
+            "z": -97.053
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        }
+      ],
+      "pos": [
+        {
+          "t": 0,
+          "pos": {
+            "x": 0.016,
+            "y": 0.023
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "pos": {
+            "x": 0.016,
+            "y": 0.023
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm": {
+      "rot": [
+        {
+          "t": 0,
+          "rot": {
+            "x": 0.179,
+            "y": -0.006,
+            "z": -8.058
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.33333334,
+          "rot": {
+            "x": -0.222,
+            "y": -0.014,
+            "z": 3.453
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "rot": {
+            "x": 0.179,
+            "y": -0.006,
+            "z": -8.058
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/HeadSet/P_Head": {
+      "rot": [
+        {
+          "t": 0,
+          "rot": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.16666667,
+          "rot": {
+            "x": -0.101,
+            "y": -0.004,
+            "z": 2.898
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "rot": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        }
+      ],
+      "pos": [
+        {
+          "t": 0,
+          "pos": {
+            "x": -0.042,
+            "y": 0.003
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "pos": {
+            "x": -0.042,
+            "y": 0.003
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ]
+    },
+    "Root/BodySet/P_Body": {
+      "rot": [
+        {
+          "t": 0,
+          "rot": {
+            "x": -0.21,
+            "y": -0.013,
+            "z": 6.042
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.16666667,
+          "rot": {
+            "x": 0.036,
+            "y": 0,
+            "z": -1.013
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "rot": {
+            "x": -0.21,
+            "y": -0.013,
+            "z": 6.042
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          }
+        }
+      ],
+      "pos": [
+        {
+          "t": 0,
+          "pos": {
+            "x": 0,
+            "y": 0
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "t": 0.16666667,
+          "pos": {
+            "x": -0.001,
+            "y": 0.021
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        },
+        {
+          "t": 0.5,
+          "pos": {
+            "x": 0,
+            "y": 0
+          },
+          "inSlope": {
+            "x": 0,
+            "y": 0
+          },
+          "outSlope": {
+            "x": 0,
+            "y": 0
+          }
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye": {
+      "vis": [
+        {
+          "t": 0,
+          "active": false
+        },
+        {
+          "t": 0.5,
+          "active": false
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose": {
+      "vis": [
+        {
+          "t": 0,
+          "active": true
+        },
+        {
+          "t": 0.5,
+          "active": true
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose": {
+      "vis": [
+        {
+          "t": 0,
+          "active": true
+        },
+        {
+          "t": 0.5,
+          "active": true
+        }
+      ]
+    },
+    "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye": {
+      "vis": [
+        {
+          "t": 0,
+          "active": false
+        },
+        {
+          "t": 0.5,
+          "active": false
+        }
+      ]
+    }
+  }
+}

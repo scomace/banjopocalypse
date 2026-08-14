@@ -1,0 +1,1314 @@
+{
+  "rootPath": "Root",
+  "bones": [
+    {
+      "name": "Root",
+      "path": "Root",
+      "parent": null,
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "BodySet",
+      "path": "Root/BodySet",
+      "parent": "Root",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.25
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Body",
+      "path": "Root/BodySet/P_Body",
+      "parent": "Root/BodySet",
+      "defaultPos": {
+        "x": -0.013,
+        "y": 0.031
+      },
+      "defaultRot": {
+        "x": -0.107,
+        "y": -0.004,
+        "z": 3.056
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Back",
+      "path": "Root/BodySet/P_Body/P_Back",
+      "parent": "Root/BodySet/P_Body",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Back",
+      "path": "Root/BodySet/P_Body/P_Back/Back",
+      "parent": "Root/BodySet/P_Body/P_Back",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -100
+    },
+    {
+      "name": "Body",
+      "path": "Root/BodySet/P_Body/Body",
+      "parent": "Root/BodySet/P_Body",
+      "defaultPos": {
+        "x": 0,
+        "y": -0.015625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 0
+    },
+    {
+      "name": "P_ClothBody",
+      "path": "Root/BodySet/P_Body/Body/P_ClothBody",
+      "parent": "Root/BodySet/P_Body/Body",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "ClothBody",
+      "path": "Root/BodySet/P_Body/Body/P_ClothBody/ClothBody",
+      "parent": "Root/BodySet/P_Body/Body/P_ClothBody",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 1
+    },
+    {
+      "name": "P_ArmorBody",
+      "path": "Root/BodySet/P_Body/Body/P_ArmorBody",
+      "parent": "Root/BodySet/P_Body/Body",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.015625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "BodyArmor",
+      "path": "Root/BodySet/P_Body/Body/P_ArmorBody/BodyArmor",
+      "parent": "Root/BodySet/P_Body/Body/P_ArmorBody",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 2
+    },
+    {
+      "name": "HeadSet",
+      "path": "Root/BodySet/P_Body/HeadSet",
+      "parent": "Root/BodySet/P_Body",
+      "defaultPos": {
+        "x": 0.03125,
+        "y": 0.140625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Head",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "parent": "Root/BodySet/P_Body/HeadSet",
+      "defaultPos": {
+        "x": -0.046875,
+        "y": -0.015625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Hair",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Hair",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.296875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "7_Hair",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Hair/7_Hair",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Hair",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 6
+    },
+    {
+      "name": "P_Head",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Head",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.1875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "5_Head",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Head/5_Head",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Head",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 5
+    },
+    {
+      "name": "P_Mustache",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Mustache",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "defaultPos": {
+        "x": -0.046875,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "6_FaceHair",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Mustache/6_FaceHair",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Mustache",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 5
+    },
+    {
+      "name": "P_Eye",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.078125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_REye",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "PivotBack",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotBack",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.046875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Back",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotBack/Back",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotBack",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 6
+    },
+    {
+      "name": "PivotFront",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotFront",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Front",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotFront/Front",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_REye/PivotFront",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 7
+    },
+    {
+      "name": "P_LEye",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye",
+      "defaultPos": {
+        "x": -0.140625,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "PivotBack",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotBack",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.046875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Back",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotBack/Back",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotBack",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 6
+    },
+    {
+      "name": "PivotFront",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotFront",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Front",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotFront/Front",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LEye/PivotFront",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 6
+    },
+    {
+      "name": "P_RClose",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultActive": false
+    },
+    {
+      "name": "PivotFront",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose/PivotFront",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Front",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose/PivotFront/Front",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_RClose/PivotFront",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 7
+    },
+    {
+      "name": "P_LClose",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye",
+      "defaultPos": {
+        "x": -0.140625,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultActive": false
+    },
+    {
+      "name": "PivotFront",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose/PivotFront",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "Front",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose/PivotFront/Front",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Eye/P_LClose/PivotFront",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 6
+    },
+    {
+      "name": "P_Helmet",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Helmet",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.265625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "11_Helmet1",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Helmet/11_Helmet1",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Helmet",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 11
+    },
+    {
+      "name": "12_Helmet2 ",
+      "path": "Root/BodySet/P_Body/HeadSet/P_Head/P_Helmet/12_Helmet2 ",
+      "parent": "Root/BodySet/P_Body/HeadSet/P_Head/P_Helmet",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 12
+    },
+    {
+      "name": "ArmSet",
+      "path": "Root/BodySet/P_Body/ArmSet",
+      "parent": "Root/BodySet/P_Body",
+      "defaultPos": {
+        "x": 0,
+        "y": 0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "ArmL",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL",
+      "parent": "Root/BodySet/P_Body/ArmSet",
+      "defaultPos": {
+        "x": 0.109375,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_LArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL",
+      "defaultPos": {
+        "x": -0.046875,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Arm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm",
+      "defaultPos": {
+        "x": 0.125,
+        "y": -0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "20_L_Arm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 20
+    },
+    {
+      "name": "P_LCArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_LCArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm",
+      "defaultPos": {
+        "x": -0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "21_LCArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_LCArm/21_LCArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_LCArm",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 21
+    },
+    {
+      "name": "P_Shoulder",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_Shoulder",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm",
+      "defaultPos": {
+        "x": -0.046875,
+        "y": 0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 30
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "25_L_Shoulder",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_Shoulder/25_L_Shoulder",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Arm/20_L_Arm/P_Shoulder",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 25
+    },
+    {
+      "name": "P_Weapon",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Weapon",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm",
+      "defaultPos": {
+        "x": 0.15625,
+        "y": -0.125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 120
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "L_Weapon",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Weapon/L_Weapon",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Weapon",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 19
+    },
+    {
+      "name": "P_Shield",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Shield",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm",
+      "defaultPos": {
+        "x": 0.15625,
+        "y": -0.125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": -45
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "L_Shield",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Shield/L_Shield",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmL/P_LArm/P_Shield",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": 25
+    },
+    {
+      "name": "ArmR",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR",
+      "parent": "Root/BodySet/P_Body/ArmSet",
+      "defaultPos": {
+        "x": -0.15625,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_RArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR",
+      "defaultPos": {
+        "x": 0.046875,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "P_Arm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm",
+      "defaultPos": {
+        "x": -0.078125,
+        "y": -0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "-20_R_Arm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -20
+    },
+    {
+      "name": "P_RCArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_RCArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm",
+      "defaultPos": {
+        "x": 0.015625,
+        "y": 0.03125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "-19_RCArm",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_RCArm/-19_RCArm",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_RCArm",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -19
+    },
+    {
+      "name": "P_Shoulder",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_Shoulder",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm",
+      "defaultPos": {
+        "x": 0.0625,
+        "y": 0.09375
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": -30
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "-15_R_Shoulder",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_Shoulder/-15_R_Shoulder",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Arm/-20_R_Arm/P_Shoulder",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -15
+    },
+    {
+      "name": "P_Weapon",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Weapon",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm",
+      "defaultPos": {
+        "x": -0.125,
+        "y": -0.125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 60
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "R_Weapon",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Weapon/R_Weapon",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Weapon",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -15
+    },
+    {
+      "name": "P_Shield",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Shield",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm",
+      "defaultPos": {
+        "x": -0.125,
+        "y": -0.125
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 45
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "R_Shield",
+      "path": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Shield/R_Shield",
+      "parent": "Root/BodySet/P_Body/ArmSet/ArmR/P_RArm/P_Shield",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -21
+    },
+    {
+      "name": "P_RFoot",
+      "path": "Root/P_RFoot",
+      "parent": "Root",
+      "defaultPos": {
+        "x": -0.125,
+        "y": 0.1875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "_12R_Foot",
+      "path": "Root/P_RFoot/_12R_Foot",
+      "parent": "Root/P_RFoot",
+      "defaultPos": {
+        "x": 0,
+        "y": -0.0625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -12
+    },
+    {
+      "name": "P_RCloth",
+      "path": "Root/P_RFoot/P_RCloth",
+      "parent": "Root/P_RFoot",
+      "defaultPos": {
+        "x": 0,
+        "y": -0.0625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "_11R_Cloth",
+      "path": "Root/P_RFoot/P_RCloth/_11R_Cloth",
+      "parent": "Root/P_RFoot/P_RCloth",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -11
+    },
+    {
+      "name": "P_LFoot",
+      "path": "Root/P_LFoot",
+      "parent": "Root",
+      "defaultPos": {
+        "x": 0.125,
+        "y": 0.1875
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "_3L_Foot",
+      "path": "Root/P_LFoot/_3L_Foot",
+      "parent": "Root/P_LFoot",
+      "defaultPos": {
+        "x": 0,
+        "y": -0.0625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -3
+    },
+    {
+      "name": "P_LCloth",
+      "path": "Root/P_LFoot/P_LCloth",
+      "parent": "Root/P_LFoot",
+      "defaultPos": {
+        "x": 0,
+        "y": -0.0625
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      }
+    },
+    {
+      "name": "_2L_Cloth",
+      "path": "Root/P_LFoot/P_LCloth/_2L_Cloth",
+      "parent": "Root/P_LFoot/P_LCloth",
+      "defaultPos": {
+        "x": 0,
+        "y": 0
+      },
+      "defaultRot": {
+        "x": 0,
+        "y": 0,
+        "z": 0
+      },
+      "pivot": {
+        "x": 0,
+        "y": 0
+      },
+      "sortingOrder": -2
+    }
+  ]
+}

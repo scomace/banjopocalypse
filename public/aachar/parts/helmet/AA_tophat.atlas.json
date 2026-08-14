@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/helmet/AA_tophat.png",
+  "width": 30,
+  "height": 24,
+  "pixelDensity": 1.5,
+  "smooth": false,
+  "regions": {
+    "Helmet": {
+      "x": 0,
+      "y": 0,
+      "width": 30,
+      "height": 24,
+      "pivot": {
+        "x": 0.45,
+        "y": 0
+      }
+    }
+  }
+}

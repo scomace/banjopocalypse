@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_abacus.png",
+  "width": 24,
+  "height": 18,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 18,
+      "pivot": {
+        "x": 0.4791666666666667,
+        "y": 0.1111111111111111
+      }
+    }
+  }
+}

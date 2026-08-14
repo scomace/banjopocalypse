@@ -1,0 +1,19 @@
+{
+  "image": "/aachar/parts/weapon/AA_hammer.png",
+  "width": 24,
+  "height": 26,
+  "pixelDensity": 2,
+  "smooth": false,
+  "regions": {
+    "Weapon": {
+      "x": 0,
+      "y": 0,
+      "width": 24,
+      "height": 26,
+      "pivot": {
+        "x": 0.4583333333333333,
+        "y": 0.3076923076923077
+      }
+    }
+  }
+}
