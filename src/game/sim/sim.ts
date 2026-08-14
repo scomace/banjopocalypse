@@ -203,9 +203,9 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     // partner pop check
     const partner = sim.players.find((q) => q !== p && q.alive);
     if (partner && circleOverlapsBox(g.x, g.y, 20, partner.x, partner.y, P_WIDTH + 8, P_HEIGHT)) {
+      // The death already charged the life; popping the ghost is free.
       p.ghost = null;
       p.alive = true;
-      p.livesLeft--;
       p.x = partner.x;
       p.y = partner.y - 4;
       p.vy = -4;
@@ -339,6 +339,21 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     if (b.state.kind !== "trapped") continue;
     if (circleOverlapsBox(b.x, b.y, BUBBLE_R + 2, p.x, p.y, P_WIDTH + 6, P_HEIGHT)) {
       popBubble(sim, b, p.index);
+    }
+  }
+
+  // secret warp-cellar door (deathless boss levels only)
+  if (sim.secretDoorOpen && sim.level.secretDoor) {
+    const d = sim.level.secretDoor;
+    if (Math.abs(p.x - d.x) < 22 && Math.abs(p.y - d.y) < 30) {
+      sim.secretDoorOpen = false;
+      sim.secretEntered = true;
+      emit(sim, { t: "sfx", name: "gospel" });
+      emit(sim, { t: "burst", text: "WARP CELLAR!", x: d.x, y: d.y - 40, big: true });
+      // food shower
+      for (let i = 0; i < 8; i++) {
+        spawnFood(sim, 80 + sim.rng() * (FIELD_W - 160), 120, 3 + Math.floor(sim.rng() * 3), 0);
+      }
     }
   }
 

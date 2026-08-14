@@ -54,6 +54,7 @@ export class PlayScene extends Phaser.Scene {
   private tilesDrawn = false;
   private tileGroup: Phaser.GameObjects.Image[] = [];
   private sprites = new Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Image>();
+  private texts = new Map<string, Phaser.GameObjects.Text>();
   private zoneGfx!: Phaser.GameObjects.Graphics;
   private bossBar!: Phaser.GameObjects.Graphics;
   private levelKey = "";
@@ -316,8 +317,22 @@ export class PlayScene extends Phaser.Scene {
         glow.setTint(it.forPlayer === 0 ? 0x9be8c8 : 0xf0c880);
       }
       if (it.kind === "letter") {
-        const letterText = this.obtain(`itl${it.id}`, "i:letterbubble#0", 43) as unknown as Phaser.GameObjects.Sprite;
-        void letterText; // letter glyph drawn via bitmap text below (HUD layer)
+        const id = `itl${it.id}`;
+        this.used.add(id);
+        let txt = this.texts.get(id);
+        if (!txt) {
+          txt = this.add
+            .text(0, 0, YEEHAW[it.data], {
+              fontFamily: "'Press Start 2P', monospace",
+              fontSize: "13px",
+              color: "#ffd84a",
+            })
+            .setOrigin(0.5, 0.5)
+            .setDepth(43);
+          this.texts.set(id, txt);
+        }
+        txt.setPosition(Math.round(it.x), Math.round(it.y + bob));
+        txt.setAlpha(it.ttl < 120 && t % 12 < 6 ? 0.4 : 1);
       }
     }
 
@@ -438,11 +453,17 @@ export class PlayScene extends Phaser.Scene {
       this.zoneGfx.strokePath();
     }
 
-    // sweep unused sprites
+    // sweep unused sprites + texts
     for (const [id, s] of this.sprites) {
       if (!this.used.has(id)) {
         s.destroy();
         this.sprites.delete(id);
+      }
+    }
+    for (const [id, s] of this.texts) {
+      if (!this.used.has(id)) {
+        s.destroy();
+        this.texts.delete(id);
       }
     }
   }

@@ -1,0 +1,6 @@
+{
+  // Cloudflare Pages deploy config. `npm run deploy` builds and ships dist/.
+  "name": "banjopocalypse",
+  "compatibility_date": "2026-08-01",
+  "pages_build_output_dir": "dist"
+}

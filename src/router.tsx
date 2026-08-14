@@ -22,6 +22,11 @@ const BakerLab = lazy(() =>
     default: m.BakerLab,
   })),
 );
+const SpriteGallery = lazy(() =>
+  import("./screens/admin-sprites/SpriteGallery").then((m) => ({
+    default: m.SpriteGallery,
+  })),
+);
 
 function AdminLoading() {
   return (
@@ -52,6 +57,16 @@ export function AppRouter() {
             <div className="admin-root">
               <Suspense fallback={<AdminLoading />}>
                 <BakerLab />
+              </Suspense>
+            </div>
+          }
+        />
+        <Route
+          path="/admin/sprites"
+          element={
+            <div className="admin-root">
+              <Suspense fallback={<AdminLoading />}>
+                <SpriteGallery />
               </Suspense>
             </div>
           }

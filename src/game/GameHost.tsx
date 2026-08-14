@@ -193,6 +193,8 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+  // dev observability for headless QA
+  (window as unknown as { __banjo?: unknown }).__banjo = controller;
   const sampler = useMemo(() => new InputSampler(), []);
 
   // bake the cast once
@@ -254,14 +256,41 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baked]);
 
-  // pause key
+  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = jar)
   useEffect(() => {
+    const dev = new URLSearchParams(window.location.search).has("quickstart");
     const h = (e: KeyboardEvent) => {
       if (e.code === "Escape" && flow.kind === "playing") setPaused((p) => !p);
+      if (!dev) return;
+      const sim = controller.sim;
+      if (e.code === "Digit0") {
+        if (sim.boss) sim.boss.hp = 1;
+        for (const en of sim.enemies) {
+          if (en.phase.kind !== "dying") {
+            en.phase = {
+              kind: "dying",
+              ticks: 0,
+              targetX: en.x,
+              targetY: en.y,
+              chain: 1,
+              toBoss: false,
+            };
+          }
+        }
+      } else if (e.code === "Digit9") {
+        const p = sim.players[0];
+        if (p && p.loadout.weapons.length > 0) {
+          p.frenzy = {
+            weapon: p.loadout.weapons[0].id,
+            level: p.loadout.weapons[0].level,
+            ticksLeft: 20 * 60,
+          };
+        }
+      }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [flow.kind]);
+  }, [flow.kind, controller]);
 
   const anyPlayers = controller.run.players.some((p) => p !== null);
   if (!anyPlayers) return null;
