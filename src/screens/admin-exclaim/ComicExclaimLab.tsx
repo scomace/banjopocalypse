@@ -25,7 +25,7 @@ const SY = 0.92;
 // Text tries to fill this much width before the font size clamps.
 const TARGET_TEXT_W = 500;
 
-interface ExclaimPalette {
+export interface ExclaimPalette {
   name: string;
   /** Back (spikier, larger) burst layer. */
   backFill: string;
@@ -44,7 +44,7 @@ interface ExclaimPalette {
   speck: string;
 }
 
-const PALETTES: ExclaimPalette[] = [
+export const PALETTES: ExclaimPalette[] = [
   {
     name: "Classic",
     backFill: "#f13a12",
@@ -171,7 +171,7 @@ function starPath(
   return `M${pts.join("L")}Z`;
 }
 
-interface BurstGeometry {
+export interface BurstGeometry {
   backPath: string;
   frontPath: string;
   /** bx/by = the streak's outward direction, used by blast animations. */
@@ -180,7 +180,7 @@ interface BurstGeometry {
   speckDashes: { x1: number; y1: number; x2: number; y2: number }[];
 }
 
-function buildBurst(seed: number, spikes: number): BurstGeometry {
+export function buildBurst(seed: number, spikes: number): BurstGeometry {
   const rng = mulberry32(seed);
   const step = (Math.PI * 2) / spikes;
   const backPath = starPath(rng, spikes, 250, 148, rng() * step);
@@ -228,7 +228,7 @@ function buildBurst(seed: number, spikes: number): BurstGeometry {
   return { backPath, frontPath, streaks, speckCircles, speckDashes };
 }
 
-interface SplatGeometry {
+export interface SplatGeometry {
   blobPath: string;
   /** Darker goo splotches inside the blob — the splat's "streak" layer. */
   splotches: { x: number; y: number; rx: number; ry: number; bx: number; by: number }[];
@@ -238,7 +238,7 @@ interface SplatGeometry {
 
 // A gooey splat: lobed blob (some lobes stretched into arms), smoothed by
 // running quadratics through the midpoints of a jittered radial polygon.
-function buildSplat(seed: number, lobes: number, drips: number): SplatGeometry {
+export function buildSplat(seed: number, lobes: number, drips: number): SplatGeometry {
   const rng = mulberry32(seed ^ 0x5eaf00d);
   const step = (Math.PI * 2) / lobes;
   const pts: [number, number][] = [];
@@ -288,7 +288,7 @@ function buildSplat(seed: number, lobes: number, drips: number): SplatGeometry {
   return { blobPath: d, splotches, droplets };
 }
 
-interface ZapGeometry {
+export interface ZapGeometry {
   cloudPath: string;
   /** Lightning bolts radiating from behind the cloud; big ones get the
       brighter fill. */
@@ -324,7 +324,7 @@ function boltPath(a: number, r0: number, len: number, w: number): string {
 
 // The electric zap: a scalloped thundercloud (outward arcs between jittered
 // ring points) with a ring of bolts behind it and sparks flying.
-function buildZap(seed: number, boltCount: number): ZapGeometry {
+export function buildZap(seed: number, boltCount: number): ZapGeometry {
   const rng = mulberry32(seed ^ 0x2a9b01);
 
   const bumps = 10 + Math.floor(rng() * 3);
@@ -391,7 +391,7 @@ function buildZap(seed: number, boltCount: number): ZapGeometry {
   return { cloudPath, bolts, sparks, dots, dashes };
 }
 
-interface KaboomGeometry {
+export interface KaboomGeometry {
   /** Front fireball cloud. */
   cloudPath: string;
   /** Bigger, deeper-orange fireball behind it. */
@@ -430,7 +430,7 @@ function fireballPath(
 
 // The kaboom: a double fireball cloud that boils with rimmed puff bubbles,
 // speed-rays behind, embers around.
-function buildKaboom(seed: number, puffCount: number): KaboomGeometry {
+export function buildKaboom(seed: number, puffCount: number): KaboomGeometry {
   const rng = mulberry32(seed ^ 0xca800f);
   const underPath = fireballPath(rng, 9 + Math.floor(rng() * 3), 185, 30);
   const cloudPath = fireballPath(rng, 11 + Math.floor(rng() * 3), 145, 35);
@@ -478,7 +478,7 @@ function buildKaboom(seed: number, puffCount: number): KaboomGeometry {
   return { cloudPath, underPath, rays, puffs, sparks };
 }
 
-interface ScreamGeometry {
+export interface ScreamGeometry {
   /** The jagged scream bubble. */
   bubblePath: string;
   /** Sharp rays radiating behind it (back layer). */
@@ -491,7 +491,7 @@ interface ScreamGeometry {
 
 // The aaargh: a chaotic spiked scream bubble — high radius variance with a
 // few extra-long spikes, so it reads as a shriek rather than an explosion.
-function buildScream(seed: number, spikes: number): ScreamGeometry {
+export function buildScream(seed: number, spikes: number): ScreamGeometry {
   const rng = mulberry32(seed ^ 0xaaa421);
   const step = (Math.PI * 2) / spikes;
   const outer: string[] = [];
@@ -677,7 +677,7 @@ const OUT_ANIMS = [
   { key: "melt", label: "Melt", dur: 1300 },
 ] as const;
 
-const ANIM_CSS = `
+export const ANIM_CSS = `
 .cxa-root, .cxa-root * { transform-box: fill-box; transform-origin: center; }
 
 /* ---- shared keyframes ---- */
@@ -918,7 +918,7 @@ const ANIM_CSS = `
 .cxa-out-deflate .cxa-speck { animation: cxaSpeckBlast .4s ease-out both; }
 `;
 
-interface LabState {
+export interface LabState {
   text: string;
   palette: string;
   /** "burst" (spiky explosion), "splat" (gooey blob), or "zap" (cloud + bolts). */
@@ -958,7 +958,7 @@ const STORAGE_KEY = "exclaim-lab-v1";
 
 // Keep only known keys with the right types (shared by localStorage load and
 // pasted-JSON import, which both take arbitrary input).
-function sanitizeState(raw: unknown): LabState {
+export function sanitizeState(raw: unknown): LabState {
   if (typeof raw !== "object" || raw === null) return DEFAULT_STATE;
   const src = raw as Record<string, unknown>;
   const out = { ...DEFAULT_STATE };
