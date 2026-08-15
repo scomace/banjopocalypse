@@ -17,20 +17,34 @@ type ControllerLike = {
 };
 
 const P_COLORS = ["#9be8c8", "#f0c880"];
-const KEYS: Record<number, { left: string; right: string; confirm: string[]; reroll: string }> = {
-  0: { left: "KeyA", right: "KeyD", confirm: ["KeyF", "KeyG"], reroll: "KeyS" },
-  1: { left: "ArrowLeft", right: "ArrowRight", confirm: ["KeyK", "KeyL"], reroll: "ArrowDown" },
+type CardKeys = { left: string[]; right: string[]; confirm: string[]; reroll: string };
+const KEYS: Record<number, CardKeys> = {
+  0: { left: ["KeyA"], right: ["KeyD"], confirm: ["KeyF", "KeyG"], reroll: "KeyS" },
+  1: { left: ["ArrowLeft"], right: ["ArrowRight"], confirm: ["KeyK", "KeyL"], reroll: "ArrowDown" },
+};
+// Solo: the arrow cluster is free, so it drives player 1's card too.
+const SOLO_KEYS: Record<number, CardKeys> = {
+  0: {
+    left: ["KeyA", "ArrowLeft"],
+    right: ["KeyD", "ArrowRight"],
+    confirm: ["KeyF", "KeyG", "Enter", "Space"],
+    reroll: "KeyS",
+  },
+  1: KEYS[1],
 };
 
 export function IntermissionOverlay({
   controller,
   cards,
+  solo = false,
   onDone,
 }: {
   controller: ControllerLike;
   cards: (Card[] | null)[];
+  solo?: boolean;
   onDone: () => void;
 }) {
+  const keymap = solo ? SOLO_KEYS : KEYS;
   const activePlayers = useMemo(
     () => cards.map((c, i) => (c ? i : -1)).filter((i) => i >= 0),
     [cards],
@@ -43,12 +57,12 @@ export function IntermissionOverlay({
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       for (const pi of activePlayers) {
-        const keys = KEYS[pi];
+        const keys = keymap[pi];
         const hand = dealt[pi];
         if (!hand || locked[pi]) continue;
-        if (e.code === keys.left) {
+        if (keys.left.includes(e.code)) {
           setCursor((c) => c.map((v, i) => (i === pi ? (v + hand.length - 1) % hand.length : v)));
-        } else if (e.code === keys.right) {
+        } else if (keys.right.includes(e.code)) {
           setCursor((c) => c.map((v, i) => (i === pi ? (v + 1) % hand.length : v)));
         } else if (keys.confirm.includes(e.code)) {
           controller.pickCard(pi, hand[cursor[pi]]);
@@ -58,7 +72,7 @@ export function IntermissionOverlay({
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [activePlayers, cursor, dealt, locked, controller]);
+  }, [activePlayers, cursor, dealt, locked, controller, keymap]);
 
   useEffect(() => {
     const need = activePlayers.every((pi) => locked[pi]);

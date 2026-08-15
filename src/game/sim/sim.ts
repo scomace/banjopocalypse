@@ -6,7 +6,7 @@ import { mulberry32, pick, rangeInt } from "../core/rng";
 import type { EnemyKind, LevelDef, ParsedLevel, WorldDef } from "../levels/types";
 import { W_LEFT, W_RIGHT, W_UP } from "../levels/types";
 import { parseLevel } from "../levels/parse";
-import { castById } from "../cast";
+import { castById, castJumpMult } from "../cast";
 import {
   BUBBLE_BLOW_COOLDOWN,
   BUBBLE_BOUNCE_VY,
@@ -15,6 +15,7 @@ import {
   BUBBLE_PUFF_TICKS_PER_PIP,
   BUBBLE_R,
   BUBBLE_RIDE_POPS_AT,
+  BUBBLE_RIDE_TICKS,
   BUBBLE_RISE,
   BUBBLE_TRAP_TICKS,
   BUBBLE_TTL_TICKS,
@@ -35,6 +36,7 @@ import {
   P_GRAVITY,
   P_HEIGHT,
   P_INVULN_TICKS,
+  P_JUMP_CUT_VY,
   P_JUMP_VY,
   P_MAX_FALL,
   P_MAX_SPEED,
@@ -117,7 +119,7 @@ export function createSim(cfg: SimConfig): Sim {
       invuln: P_INVULN_TICKS,
       respawnIn: 0,
       maxSpeed: P_MAX_SPEED * (0.85 + cast.speed * 0.06),
-      jumpVy: P_JUMP_VY * (0.92 + cast.jump * 0.035),
+      jumpVy: P_JUMP_VY * castJumpMult(cast.jump),
       puffTicks:
         BUBBLE_LAUNCH_TICKS +
         cast.puff * BUBBLE_PUFF_TICKS_PER_PIP +
@@ -271,7 +273,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     emit(sim, { t: "sfx", name: "jump", pitch: 0.95 + sim.rng() * 0.1 });
   }
   // variable jump height
-  if (!jump && p.vy < -2.5) p.vy = -2.5;
+  if (!jump && p.vy < P_JUMP_CUT_VY) p.vy = P_JUMP_CUT_VY;
 
   // gravity
   p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
@@ -294,8 +296,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
           p.y = b.y - BUBBLE_R - 1;
           p.grounded = true;
           p.coyote = COYOTE_TICKS;
-          b.rides += 1;
-          b.vy = Math.min(b.vy + 0.4, 0.8); // riding weighs it down a touch
+          // A ridden bubble is a slow elevator, not a trapdoor: it keeps its
+          // lift (double in an updraft column) and gives out on a tick budget.
+          b.rideTicks += 1;
+          b.ridden = 2;
+          if (b.rideTicks >= BUBBLE_RIDE_TICKS) popBubble(sim, b, p.index);
         }
         if (b.rides >= BUBBLE_RIDE_POPS_AT) popBubble(sim, b, p.index);
         break;
@@ -327,6 +332,8 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       state: { kind: "launch", ticks: p.puffTicks },
       age: 0,
       rides: 0,
+      rideTicks: 0,
+      ridden: 0,
       wobblePhase: sim.rng() * Math.PI * 2,
     });
     emit(sim, { t: "sfx", name: "hic", pitch: p.hicPitch });
@@ -477,6 +484,10 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
       // ceiling: drift toward top center and mill around
       tx = b.x < FIELD_W / 2 ? 0.35 : -0.35;
       ty = 0;
+    }
+    if (b.ridden > 0) {
+      b.ridden--;
+      ty *= 0.55; // a rider is heavy, but a bubble under one still climbs
     }
     b.vx += (tx - b.vx) * 0.04;
     b.vy += (ty - b.vy) * 0.05;

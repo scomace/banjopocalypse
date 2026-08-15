@@ -69,6 +69,10 @@ export type Bubble = {
   state: BubbleState;
   age: number;
   rides: number;
+  /** Ticks a player has stood on this bubble; it pops at BUBBLE_RIDE_TICKS. */
+  rideTicks: number;
+  /** Counts down while someone is aboard, so lift can account for the load. */
+  ridden: number;
   wobblePhase: number;
 };
 

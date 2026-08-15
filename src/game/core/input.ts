@@ -10,6 +10,14 @@ export const CMD_BLOW = 8;
 
 export type InputCommand = number;
 
+const SCROLL_KEYS = new Set([
+  "ArrowLeft",
+  "ArrowRight",
+  "ArrowUp",
+  "ArrowDown",
+  "Space",
+]);
+
 export type KeyBindings = {
   left: string[];
   right: string[];
@@ -36,6 +44,22 @@ export const DEFAULT_BINDINGS: [KeyBindings, KeyBindings] = [
     jump: ["ArrowUp", "KeyK"],
     blow: ["KeyL"],
   },
+];
+
+/**
+ * Solo play: nobody is using the arrow cluster, so player 1 answers to both
+ * WASD and the arrows (plus Space to jump). Co-op falls back to DEFAULT_BINDINGS.
+ */
+export const SOLO_BINDINGS: [KeyBindings, KeyBindings] = [
+  {
+    left: ["KeyA", "ArrowLeft"],
+    right: ["KeyD", "ArrowRight"],
+    up: ["KeyW", "ArrowUp"],
+    down: ["KeyS", "ArrowDown"],
+    jump: ["KeyW", "KeyF", "ArrowUp", "Space"],
+    blow: ["KeyG", "KeyL", "ShiftLeft"],
+  },
+  DEFAULT_BINDINGS[1],
 ];
 
 /**
@@ -68,6 +92,8 @@ export class InputSampler {
 
   private onDown = (e: KeyboardEvent) => {
     this.down.add(e.code);
+    // Arrows and Space scroll the document by default; a bound game key must not.
+    if (SCROLL_KEYS.has(e.code) && this.isBound(e.code)) e.preventDefault();
   };
   private onUp = (e: KeyboardEvent) => {
     this.down.delete(e.code);
@@ -83,6 +109,17 @@ export class InputSampler {
     const live = [];
     for (let i = 0; i < pads.length; i++) if (pads[i]) live.push(i);
     this.padFor = [live[0] ?? -1, live[1] ?? -1];
+  }
+
+  private isBound(code: string): boolean {
+    return this.bindings.some((b) =>
+      b.left.includes(code) ||
+      b.right.includes(code) ||
+      b.up.includes(code) ||
+      b.down.includes(code) ||
+      b.jump.includes(code) ||
+      b.blow.includes(code),
+    );
   }
 
   isKeyDown(code: string): boolean {

@@ -75,7 +75,8 @@ export type BakedCharacter = {
   /** Root-bone origin inside a frame, canvas px. */
   anchorX: number;
   anchorY: number;
-  /** Feet line (lowest visible pixel across all frames), canvas px. */
+  /** Feet line: lowest visible pixel of the STANDING pose, canvas px. Sprawling
+   *  clips (die, sit) reach lower; anchoring to them floats the idle pose. */
   groundY: number;
   clips: Record<string, BakedClipInfo>;
 };
@@ -332,6 +333,8 @@ export async function bakeCharacter(name: string): Promise<BakedCharacter | null
   type PendingFrame = { world: Map<string, WorldXfm>; vis: Map<string, boolean> };
   const clipFrames = new Map<string, PendingFrame[]>();
   const bounds = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+  /** Per-clip lowest pixel, so the feet line can come from a standing clip. */
+  const clipMaxY = new Map<string, number>();
   for (const [gameName, def] of Object.entries(BAKED_CLIPS)) {
     const clip = compiledAaClip(resolved.model, def.aaClip);
     if (!clip) continue;
@@ -340,6 +343,7 @@ export async function bakeCharacter(name: string): Promise<BakedCharacter | null
       Math.max(2, Math.round(clip.duration * def.fps)),
     );
     const frames: PendingFrame[] = [];
+    const own = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
     for (let f = 0; f < count; f++) {
       // Looping clips sample [0, duration) so frame N-1 != frame 0; one-shot
       // clips sample [0, duration] so the final pose is held exactly.
@@ -350,11 +354,15 @@ export async function bakeCharacter(name: string): Promise<BakedCharacter | null
       for (const s of slices) {
         if (pose.vis.get(s.bonePath) === false) continue;
         const w = pose.world.get(s.bonePath);
-        if (w) sliceBounds(s, w, bounds);
+        if (w) {
+          sliceBounds(s, w, bounds);
+          sliceBounds(s, w, own);
+        }
       }
       frames.push(pose);
     }
     clipFrames.set(gameName, frames);
+    if (isFinite(own.maxY)) clipMaxY.set(gameName, own.maxY);
   }
   if (!isFinite(bounds.minX)) return null;
 
@@ -362,6 +370,11 @@ export async function bakeCharacter(name: string): Promise<BakedCharacter | null
   const frameH = Math.ceil(bounds.maxY - bounds.minY) + FRAME_PAD * 2;
   const anchorX = -bounds.minX + FRAME_PAD;
   const anchorY = -bounds.minY + FRAME_PAD;
+  // The feet line is where the character STANDS, not the union bottom: `die`
+  // and `sit` sprawl a body-length lower, and anchoring the sprite origin
+  // there hovers every walking frame above the floor.
+  const standMaxY = clipMaxY.get("idle") ?? clipMaxY.get("run") ?? bounds.maxY;
+  const groundY = anchorY + standMaxY;
 
   const totalFrames = Array.from(clipFrames.values()).reduce(
     (n, f) => n + f.length,
@@ -412,7 +425,7 @@ export async function bakeCharacter(name: string): Promise<BakedCharacter | null
     columns,
     anchorX,
     anchorY,
-    groundY: frameH - FRAME_PAD, // bounds bottom sits FRAME_PAD above the frame edge
+    groundY,
     clips,
   };
 }

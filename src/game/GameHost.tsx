@@ -7,7 +7,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type Phaser from "phaser";
 import { bakeCast, type BakedCharacter } from "../aachar/baker";
 import { castById } from "./cast";
-import { InputSampler } from "./core/input";
+import { DEFAULT_BINDINGS, InputSampler, SOLO_BINDINGS } from "./core/input";
 import { getLevelDef } from "./levels";
 import { isBossLevel, worldForLevel } from "./levels/worlds";
 import { deriveSeed } from "./core/rng";
@@ -195,7 +195,12 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
   );
   // dev observability for headless QA
   (window as unknown as { __banjo?: unknown }).__banjo = controller;
-  const sampler = useMemo(() => new InputSampler(), []);
+  const solo = castIds.filter(Boolean).length < 2;
+  const sampler = useMemo(
+    () => new InputSampler(solo ? SOLO_BINDINGS : DEFAULT_BINDINGS),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
 
   // bake the cast once
   useEffect(() => {
@@ -308,6 +313,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
           <IntermissionOverlay
             controller={controller}
             cards={flow.cards}
+            solo={solo}
             onDone={() => controller.nextLevel()}
           />
         )}

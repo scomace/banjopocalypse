@@ -96,6 +96,16 @@ export const CAST: CastMember[] = [
   },
 ];
 
+/**
+ * Jump-impulse multiplier for a character's `jump` pips. Deliberately narrow:
+ * levels are built so the *weakest* jumper clears the 3-tile tier grid, and
+ * extra pips buy headroom rather than a whole extra tier. scripts/level-audit
+ * validates every layout against the weakest value this returns.
+ */
+export function castJumpMult(jumpPips: number): number {
+  return 0.94 + jumpPips * 0.022;
+}
+
 export function castById(id: string): CastMember {
   const m = CAST.find((c) => c.id === id);
   if (!m) throw new Error(`unknown cast member: ${id}`);

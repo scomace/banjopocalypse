@@ -18,9 +18,16 @@ export const P_ACCEL = 0.55;
 export const P_DECEL = 0.65;
 export const P_MAX_SPEED = 2.6; // ~4.9 tiles/s at 60hz
 export const P_AIR_CONTROL = 0.42;
-export const P_JUMP_VY = -7.4; // clears 3.5 tiles
-export const P_GRAVITY = 0.34;
-export const P_MAX_FALL = 7.0;
+// Bubble Bobble's whole ladder is "one platform = one jump". Levels are laid
+// out on a 3-tile tier grid (96px), so the weakest jumper in the cast must
+// clear 96px with room to spare: -10.0 @ 0.40g rises ~118px (3.7 tiles) for
+// jump-2 characters, ~133px for Buford. Anything 4 tiles up needs a bubble.
+// Verify with: npx tsx scripts/level-audit.mts
+export const P_JUMP_VY = -10.0;
+export const P_GRAVITY = 0.4;
+export const P_MAX_FALL = 8.5;
+/** Releasing jump cuts the rise to this — a tap is a ~1 tile hop. */
+export const P_JUMP_CUT_VY = -5.2;
 export const COYOTE_TICKS = 4;
 export const JUMP_BUFFER_TICKS = 6;
 export const P_INVULN_TICKS = 120; // post-respawn mercy
@@ -36,7 +43,9 @@ export const BUBBLE_TTL_TICKS = 12 * TICK_HZ;
 export const BUBBLE_TRAP_TICKS = 6 * TICK_HZ;
 export const BUBBLE_BLOW_COOLDOWN = 16;
 export const BUBBLE_RIDE_POPS_AT = 2;
-export const BUBBLE_BOUNCE_VY = -8.6;
+/** Ticks you can stand on a bubble before it gives out (~1.7s of elevator). */
+export const BUBBLE_RIDE_TICKS = 100;
+export const BUBBLE_BOUNCE_VY = -12.0; // ~5.4 tiles: the two-tier bubble launch
 export const CHAIN_WINDOW_TICKS = 30; // 0.5s
 
 // --- enemies ---
