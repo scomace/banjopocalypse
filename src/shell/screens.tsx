@@ -298,12 +298,15 @@ export function ScoresScreen({ onBack }: { onBack: () => void }) {
           </div>
         )}
         {scores.map((s, i) => (
-          <div key={i} className="flex justify-between py-1 font-pixel text-[10px]">
+          <div
+            key={i}
+            className="grid grid-cols-[1.75rem_3rem_1fr_2.25rem_auto] gap-2 py-1 font-pixel text-[10px]"
+          >
             <span className="text-white/50">{i + 1}.</span>
             <span className="text-[#ffd84a]">{s.initials}</span>
-            <span className="text-white/70">{castById(s.cast).displayName.toUpperCase()}</span>
+            <span className="truncate text-white/70">{castById(s.cast).displayName.toUpperCase()}</span>
             <span className="text-white/50">L{s.level}</span>
-            <span className="text-white">{s.score.toLocaleString()}</span>
+            <span className="text-right text-white">{s.score.toLocaleString()}</span>
           </div>
         ))}
       </div>
