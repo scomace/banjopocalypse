@@ -28,7 +28,7 @@ export function Marquee({ size = "text-7xl" }: { size?: string }) {
         transform: "rotate(-2deg)",
       }}
     >
-      Banjopocalypse
+      Banjo Bobble
     </h1>
   );
 }
@@ -82,7 +82,7 @@ export function TitleScreen({
     <div className="flex h-screen flex-col items-center justify-center gap-5">
       <Marquee />
       <p className="font-pixel text-[10px] text-white/60">
-        A BUBBLE-BLOWIN' HOOTENANNY AT THE END OF THE WORLD
+        A BUBBLE-BLOWIN' HOOTENANNY
       </p>
       <div className="mt-4 flex flex-col items-center gap-3">
         <MenuButton onClick={onPlay}>Play</MenuButton>
