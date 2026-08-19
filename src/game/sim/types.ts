@@ -15,6 +15,13 @@ export type Loadout = {
   evolved: string[]; // weapon ids currently in evolved form
 };
 
+/** Buford's Fishin' Line. `fly`: hook sailing out; `hold`: line is taut and
+ *  the player swings from (ax, ay); `retract`: hook zipping back to the rod. */
+export type HookState =
+  | { kind: "fly"; x: number; y: number; vx: number; vy: number; tx: number | null; ty: number | null; dist: number }
+  | { kind: "hold"; ax: number; ay: number; len: number; ticks: number }
+  | { kind: "retract"; x: number; y: number };
+
 export type PlayerState = {
   index: 0 | 1;
   castId: string;
@@ -48,6 +55,11 @@ export type PlayerState = {
   // run-level flags mirrored into the sim for convenience
   hogFatCharge: boolean; // survive one hit this level
   prayer: number; // invincibility glow ticks (special bubble)
+  // Fishin' Line (cast members with `hook`)
+  hook: HookState | null;
+  hookCooldown: number;
+  /** ticks of post-release momentum during which a fast body still kicks enemies */
+  hookKick: number;
   // presentation hints
   anim: string;
   animLock: number;
@@ -99,6 +111,9 @@ export type Enemy = {
   flying: boolean;
   shielded: boolean;
   hitFlash: number;
+  /** >0 while sent flying by a Fishin' Line hit: tumbling, harmless, bowls over kin */
+  flung: number;
+  flungBy: 0 | 1;
 };
 
 export type ProjectileKind =

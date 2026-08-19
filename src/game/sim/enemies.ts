@@ -21,6 +21,7 @@ import { circleOverlapsBox, groundAhead, moveBody, standingOnGround } from "./ph
 import type { Enemy, Sim } from "./types";
 import { emit, hurtPlayer, score } from "./sim";
 import { spawnFood } from "./items";
+import { stepFlungEnemy } from "./hook";
 
 type Archetype =
   | "walker"
@@ -87,6 +88,8 @@ export function spawnEnemy(sim: Sim, kind: EnemyKind, x: number, y: number): Ene
     flying,
     shielded: spec.archetype === "shielded",
     hitFlash: 0,
+    flung: 0,
+    flungBy: 0,
   };
 }
 
@@ -157,6 +160,12 @@ function stepOne(sim: Sim, e: Enemy): boolean {
     e.x = e.x + (e.phase.targetX - e.x) * (u * 0.35);
     e.y =
       e.y + (e.phase.targetY - e.y) * (u * 0.35) - Math.sin(u * Math.PI) * (arcH / TRAP_ARC_TICKS) * 6;
+    return true;
+  }
+
+  // sent flying by the Fishin' Line: tumble, harmless, until it lands
+  if (e.flung > 0) {
+    stepFlungEnemy(sim, e);
     return true;
   }
 

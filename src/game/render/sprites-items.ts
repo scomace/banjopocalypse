@@ -1,4 +1,4 @@
-// Original code-authored pixel art: pickups, special-bubble icons,
+// Original code-authored pixel art: pickups, special-belch icons,
 // projectiles, and misc items. Same conventions as pixelart.ts: chunky INK
 // outline, base + shade + highlight tones, '.' transparent, frames share a
 // palette. All designs original, tuned to read at 2x on dark backgrounds.
@@ -185,8 +185,8 @@ export const FOOD_SPRITES: Record<string, PixelSprite> = {
   goldenbanjo: SPR_GOLDENBANJO,
 };
 
-// --------------------------------------------------------- special bubbles
-// Icons drawn INSIDE drifting special bubbles; the bubble circle itself is
+// --------------------------------------------------------- special belches
+// Icons drawn INSIDE drifting special belches; the fume blob itself is
 // procedural. Keys match SpecialKind in sim/types.ts. Bright, chunky, small.
 
 // Ceramic jug stamped XXX. The good batch.
@@ -766,12 +766,12 @@ const SPR_LIFEJUG: PixelSprite = {
   ],
 };
 
-// Empty drifting bubble for YEEHAW letters; renderer draws the letter on top.
+// Empty drifting shine-belch for YEEHAW letters; renderer draws the letter on top.
 const SPR_LETTERBUBBLE: PixelSprite = {
   palette: {
-    c: "#8adce8", // bubble rim
-    d: "#4a9ab0", // rim shade
-    w: "#ffffff", // sheen
+    c: "#c4f06a", // fume rim
+    d: "#5e9a22", // rim shade
+    w: "#f4ffd8", // sheen
   },
   frames: [
     [
@@ -903,7 +903,35 @@ const SPR_WARPGLOW: PixelSprite = {
   ],
 };
 
+// Buford's Fishin' Line tackle: red-and-white bobber over a bent steel hook.
+const SPR_FISHHOOK: PixelSprite = {
+  palette: {
+    k: INK,
+    r: "#d8402e", // bobber red
+    w: "#fff6d8", // bobber white
+    g: "#c9ccd4", // hook steel
+    s: "#7d8290", // steel shade
+  },
+  frames: [
+    [
+      "....kk....",
+      "...krrk...",
+      "...krrk...",
+      "...kwwk...",
+      "....kk....",
+      "....gs....",
+      "....gs....",
+      "....gs....",
+      "....gs....",
+      "..g.gs....",
+      "..sggs....",
+      "...sss....",
+    ],
+  ],
+};
+
 export const MISC_ITEM_SPRITES: Record<string, PixelSprite> = {
+  fishhook: SPR_FISHHOOK,
   lifejug: SPR_LIFEJUG,
   letterbubble: SPR_LETTERBUBBLE,
   secretdoor: SPR_SECRETDOOR,

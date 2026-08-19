@@ -67,7 +67,7 @@ export function SpriteGallery() {
       <Section title="Bosses" sprites={BOSS_SPRITES} />
       <Section title="Misc critters (revenuer, hog, pets)" sprites={MISC_CRITTERS} />
       <Section title="Food" sprites={FOOD_SPRITES} />
-      <Section title="Special bubble icons" sprites={SPECIAL_SPRITES} />
+      <Section title="Special belch icons" sprites={SPECIAL_SPRITES} />
       <Section title="Projectiles" sprites={PROJECTILE_SPRITES} />
       <Section title="Misc items" sprites={MISC_ITEM_SPRITES} />
     </div>

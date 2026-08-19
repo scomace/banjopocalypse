@@ -519,6 +519,29 @@ export class JugBandAudio {
       case "noteHit":
         this.banjo(t, 81, 0.6, this.sfxBus);
         break;
+      // Buford's Fishin' Line
+      case "castLine":
+        // whip of the cane pole + reel click
+        this.noise(t, 0.12, 2600 * pitch, 1.4, 0.16);
+        this.tone(t + 0.02, 0.05, 1800, "square", 0.05, { endFreq: 900 });
+        break;
+      case "lineTaut":
+        // line snaps tight: low twang
+        this.tone(t, 0.12, 180, "triangle", 0.22, { endFreq: 120 });
+        this.banjo(t, 50, 0.35, this.sfxBus);
+        break;
+      case "lineSlack":
+        this.noise(t, 0.06, 1400, 2, 0.08);
+        break;
+      case "hookBite":
+        this.tone(t, 0.1, 300, "sawtooth", 0.18, { endFreq: 140 });
+        this.noise(t, 0.08, 800, 1.5, 0.18, "bandpass");
+        break;
+      case "fling":
+        // rising whoosh as the varmint sails
+        this.noise(t, 0.3, 600 * pitch, 1.2, 0.2, "bandpass");
+        this.tone(t, 0.28, 260 * pitch, "triangle", 0.12, { endFreq: 720 * pitch });
+        break;
       case "levelClear": {
         const tag = [57, 61, 64, 69];
         tag.forEach((n, i) => this.banjo(t + i * 0.07, n, 0.5, this.sfxBus));

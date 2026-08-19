@@ -33,6 +33,21 @@ export const JUMP_BUFFER_TICKS = 6;
 export const P_INVULN_TICKS = 120; // post-respawn mercy
 export const P_RESPAWN_TICKS = 120;
 
+// --- Fishin' Line (Buford's grapple) ---
+export const HOOK_SPEED = 18; // px/tick the hook sails out
+export const HOOK_RANGE = 11 * TILE; // cast reach
+export const HOOK_RETRACT_SPEED = 26;
+export const HOOK_MIN_LEN = 30; // reel-in stops here
+export const HOOK_REEL = 2.3; // px/tick of line reeled while held
+export const HOOK_YANK = 3.2; // impulse toward the anchor on bite
+export const HOOK_SWING_MAX = 10.5; // speed cap while on the line
+export const HOOK_COOLDOWN = 8; // ticks before the next cast
+export const HOOK_POWER = 2; // chip damage on a hooked varmint
+export const HOOK_KICK_SPEED = 2.2; // moving at least this fast on the line, your boots fling enemies
+export const FLING_VX = 7.5;
+export const FLING_VY = -6.5;
+export const FLING_TICKS = 70;
+
 // --- bubbles ---
 export const BUBBLE_R = 15;
 export const BUBBLE_LAUNCH_SPEED = 5.2;

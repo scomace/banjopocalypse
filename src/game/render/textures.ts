@@ -1,5 +1,5 @@
 // Texture registration: baked cast sheets, pixel sprites, procedural tile
-// skins per world, bubble shells. Everything lands in Phaser's texture
+// skins per world, belch shells. Everything lands in Phaser's texture
 // manager under stable keys at boot.
 
 import type Phaser from "phaser";
@@ -122,29 +122,61 @@ export function registerWorldTiles(scene: Phaser.Scene, world: WorldDef): void {
   });
 }
 
-/** Bubble shell texture (one per player tint + neutral + special gold). */
+/**
+ * Belch shell texture (one per player tint + ghost + special gold).
+ * The player swigs shine and belches a fume-bubble: a lumpy, hazy blob with
+ * a wobbly rim and a couple of stink-wisps curling inside, not a soap sphere.
+ */
 export function registerBubbleTextures(scene: Phaser.Scene): void {
-  const variants: [string, number, number][] = [
-    ["bubble:p0", 0x9be8c8, 0x2e8a5e],
-    ["bubble:p1", 0xf0c880, 0xa87020],
-    ["bubble:special", 0xffe9a0, 0xc89a20],
-    ["bubble:ghost", 0xd8d8f0, 0x8080b8],
+  const variants: [string, number, number, number][] = [
+    // key, rim, deep shade, inner haze
+    ["bubble:p0", 0xc4f06a, 0x5e9a22, 0xe8ffb0],
+    ["bubble:p1", 0xf0b850, 0xa86a14, 0xffe4a8],
+    ["bubble:special", 0xffe9a0, 0xc89a20, 0xfff6d0],
+    ["bubble:ghost", 0xd8d8f0, 0x8080b8, 0xf0f0ff],
   ];
   const R = 16;
-  for (const [key, rim, deep] of variants) {
+  // lumpy outline: base radius with five soft bulges
+  const blob = (r0: number, amp: number, phase: number): { x: number; y: number }[] => {
+    const pts: { x: number; y: number }[] = [];
+    for (let i = 0; i < 36; i++) {
+      const a = (i / 36) * Math.PI * 2;
+      const r = r0 + Math.sin(a * 5 + phase) * amp + Math.sin(a * 3 - phase) * amp * 0.4;
+      pts.push({ x: R + Math.cos(a) * r, y: R + Math.sin(a) * r });
+    }
+    return pts;
+  };
+  for (const [key, rim, deep, haze] of variants) {
     if (scene.textures.exists(key)) continue;
     const g = scene.add.graphics();
-    g.fillStyle(rim, 0.16);
-    g.fillCircle(R, R, R - 1);
+    // hazy body: two layered blobs so the middle reads denser than the edge
+    g.fillStyle(rim, 0.2);
+    g.fillPoints(blob(R - 1.8, 1.2, 0.4), true);
+    g.fillStyle(haze, 0.16);
+    g.fillPoints(blob(R - 6, 1.4, 2.1), true);
+    // wobbly rim + faint inner echo
     g.lineStyle(2.4, rim, 0.95);
-    g.strokeCircle(R, R, R - 1.5);
-    g.lineStyle(1.2, deep, 0.5);
-    g.strokeCircle(R, R, R - 4);
-    // highlight crescent
-    g.fillStyle(0xffffff, 0.85);
-    g.fillEllipse(R - 5.5, R - 6.5, 6, 4);
-    g.fillStyle(0xffffff, 0.5);
-    g.fillCircle(R + 4, R + 6, 1.6);
+    g.strokePoints(blob(R - 2.2, 1.2, 0.4), true);
+    g.lineStyle(1.1, deep, 0.45);
+    g.strokePoints(blob(R - 5, 1.0, 3.0), true);
+    // stink-wisps curling up inside
+    g.lineStyle(1.3, haze, 0.8);
+    g.beginPath();
+    g.moveTo(R - 5, R + 4);
+    g.lineTo(R - 3.2, R + 1.5);
+    g.lineTo(R - 5, R - 1);
+    g.lineTo(R - 3.2, R - 3.5);
+    g.strokePath();
+    g.beginPath();
+    g.moveTo(R + 3, R + 6);
+    g.lineTo(R + 4.8, R + 3.5);
+    g.lineTo(R + 3, R + 1);
+    g.strokePath();
+    // soft highlight so it still reads as a rounded, contained thing
+    g.fillStyle(0xffffff, 0.55);
+    g.fillEllipse(R - 5.5, R - 7, 5, 3);
+    g.fillStyle(0xffffff, 0.35);
+    g.fillCircle(R + 5, R + 6.5, 1.4);
     g.generateTexture(key, R * 2, R * 2);
     g.destroy();
   }

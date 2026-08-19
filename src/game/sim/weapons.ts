@@ -36,7 +36,7 @@ export const WEAPONS: WeaponDef[] = [
   { id: "spittoon", name: "Spittoon Special", evolvedName: "Long-Range Loogie", desc: "Arcin' chaw artillery.", evolveTonic: "lungbutter" },
   { id: "lightnin", name: "Lightnin' Rod", evolvedName: "Act of God", desc: "Bolts pick their own targets.", evolveTonic: "pickinfinger" },
   { id: "cousin", name: "Cousin Eddie", evolvedName: "Family Reunion", desc: "Kin runs in headbuttin'.", evolveTonic: "chaw" },
-  { id: "hound", name: "Hound Dawg", evolvedName: "The Howlin'", desc: "Dog herds 'em into bubbles.", evolveTonic: "grit" },
+  { id: "hound", name: "Hound Dawg", evolvedName: "The Howlin'", desc: "Dog herds 'em into belches.", evolveTonic: "grit" },
 ];
 
 export function weaponById(id: string): WeaponDef {

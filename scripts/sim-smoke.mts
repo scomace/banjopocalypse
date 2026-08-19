@@ -40,7 +40,7 @@ function finite(sim: Sim, ctx: string): void {
   if (sim.items.length > 300) fail(`${ctx}: item leak`);
 }
 
-function mkSim(level: number, weapons = [{ id: "twang", level: 2 }]) {
+function mkSim(level: number, weapons = [{ id: "twang", level: 2 }], castId = "earl") {
   return createSim({
     seed: 1234 + level,
     levelDef: getLevelDef(level),
@@ -49,7 +49,7 @@ function mkSim(level: number, weapons = [{ id: "twang", level: 2 }]) {
     isBoss: isBossLevel(level),
     players: [
       {
-        castId: "earl",
+        castId,
         loadout: { weapons, tonics: [], evolved: [] },
         livesLeft: 3,
       },
@@ -99,6 +99,38 @@ for (let lvl = 1; lvl <= 99; lvl++) {
     finite(sim, `level ${lvl}`);
   } catch (err) {
     fail(`level ${lvl} random run crashed: ${err}`);
+  }
+}
+
+// ---- 2b. Buford + Fishin' Line random runs (hook bit held in long bursts) ----
+console.log("[2b] Buford fishin' line random runs (1500 ticks x 99 levels)");
+for (let lvl = 1; lvl <= 99; lvl++) {
+  const sim = mkSim(lvl, [{ id: "washboard", level: 2 }], "buford");
+  const rng = mulberry32(4242 + lvl);
+  let prev: [number, number] = [0, 0];
+  let hookHold = 0;
+  try {
+    for (let t = 0; t < 1500; t++) {
+      if (hookHold > 0) hookHold--;
+      else if (rng() < 0.06) hookHold = 10 + Math.floor(rng() * 60);
+      const cmd =
+        (rng() < 0.4 ? 1 : 0) |
+        (rng() < 0.4 ? 2 : 0) |
+        (rng() < 0.2 ? 4 : 0) |
+        (rng() < 0.3 ? 8 : 0) |
+        (hookHold > 0 ? 16 : 0);
+      const inputs: [number, number] = [cmd, 0];
+      step(sim, inputs, prev);
+      prev = inputs;
+      const p = sim.players[0];
+      if (p.alive && (p.y < -200 || p.y > 1200)) fail(`level ${lvl}: buford flew off the map at t${t} (${p.x},${p.y})`);
+    }
+    finite(sim, `level ${lvl} (buford)`);
+    for (const e of sim.enemies) {
+      if (!Number.isFinite(e.x) || !Number.isFinite(e.y)) fail(`level ${lvl}: flung enemy NaN`);
+    }
+  } catch (err) {
+    fail(`level ${lvl} buford random run crashed: ${err}`);
   }
 }
 

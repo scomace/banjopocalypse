@@ -16,7 +16,7 @@ import {
 const VIEW_W = 900;
 const VIEW_H = 640;
 const CX = VIEW_W / 2;
-const CY = VIEW_H / 2 - 20;
+const CY = VIEW_H / 2;
 
 let injected = false;
 function ensureAnimCss(): void {
@@ -59,10 +59,17 @@ export function ComicExclaimBurst({
     [seed, big],
   );
 
-  // arc for the lettering: gentle downward bow
-  const bow = big ? 70 : 44;
-  const arcPath = `M ${CX - 280} ${CY + 30} Q ${CX} ${CY + 30 - bow} ${CX + 280} ${CY + 30}`;
+  // Lettering rides an arced baseline in the SAME centered coordinate space
+  // the geometry is built in (buildBurst/buildKaboom emit points around 0,0),
+  // so both get placed by the single translate(CX CY) below. Ends dip by
+  // `bow`, middle rides high.
   const fontSize = Math.min(150, (big ? 1500 : 1150) / Math.max(4, text.length));
+  const bow = big ? 40 : 30;
+  const baseY = fontSize * 0.34;
+  const arcPath = `M ${-300} ${(baseY + bow).toFixed(1)} Q 0 ${(baseY - bow).toFixed(1)} ${300} ${(baseY + bow).toFixed(1)}`;
+  const strokeW = fontSize * 0.115;
+  const depthX = fontSize * 0.05;
+  const depthY = fontSize * 0.07;
 
   return (
     <svg
@@ -81,7 +88,7 @@ export function ComicExclaimBurst({
         </linearGradient>
         <path id={`${uid}-arc`} d={arcPath} />
       </defs>
-      <g transform={`translate(0 0)`}>
+      <g transform={`translate(${CX} ${CY})`}>
         <g className={`cxa-root cxa-in-${anim}`}>
           <g className="cxa-all">
             {geom && (
@@ -109,7 +116,7 @@ export function ComicExclaimBurst({
                     cy={c.y}
                     r={c.r}
                     fill={palette.speck}
-                    style={{ "--bx": `${(c.x - CX).toFixed(0)}px`, "--by": `${(c.y - CY).toFixed(0)}px`, "--i": i } as CSSProperties}
+                    style={{ "--bx": `${c.x.toFixed(0)}px`, "--by": `${c.y.toFixed(0)}px`, "--i": i } as CSSProperties}
                   />
                 ))}
                 {geom.speckDashes.map((s, i) => (
@@ -123,7 +130,7 @@ export function ComicExclaimBurst({
                     stroke={palette.speck}
                     strokeWidth={4.5}
                     strokeLinecap="round"
-                    style={{ "--bx": `${(s.x1 - CX).toFixed(0)}px`, "--by": `${(s.y1 - CY).toFixed(0)}px`, "--i": geom.speckCircles.length + i } as CSSProperties}
+                    style={{ "--bx": `${s.x1.toFixed(0)}px`, "--by": `${s.y1.toFixed(0)}px`, "--i": geom.speckCircles.length + i } as CSSProperties}
                   />
                 ))}
               </>
@@ -155,26 +162,27 @@ export function ComicExclaimBurst({
               </>
             )}
             <g className="cxa-word">
+              <g transform={`translate(${depthX.toFixed(1)} ${depthY.toFixed(1)})`}>
+                <text
+                  fontFamily="Badaboom, 'Arial Black', sans-serif"
+                  fontSize={fontSize}
+                  stroke={palette.outline}
+                  strokeWidth={strokeW}
+                  strokeLinejoin="round"
+                  fill={palette.outline}
+                >
+                  <textPath href={`#${uid}-arc`} startOffset="50%" textAnchor="middle">
+                    {text}
+                  </textPath>
+                </text>
+              </g>
               <text
                 fontFamily="Badaboom, 'Arial Black', sans-serif"
                 fontSize={fontSize}
-                letterSpacing={2}
-                stroke={palette.outline}
-                strokeWidth={10}
-                fill={palette.outline}
-                transform="translate(4 8)"
-              >
-                <textPath href={`#${uid}-arc`} startOffset="50%" textAnchor="middle">
-                  {text}
-                </textPath>
-              </text>
-              <text
-                fontFamily="Badaboom, 'Arial Black', sans-serif"
-                fontSize={fontSize}
-                letterSpacing={2}
                 fill={`url(#${uid}-text)`}
                 stroke={palette.outline}
-                strokeWidth={4}
+                strokeWidth={strokeW}
+                strokeLinejoin="round"
                 style={{ paintOrder: "stroke" }}
               >
                 <textPath href={`#${uid}-arc`} startOffset="50%" textAnchor="middle">

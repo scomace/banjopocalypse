@@ -70,6 +70,7 @@ import { stepWeapons } from "./weapons";
 import { spawnSpecial, stepSpecialsAndZones } from "./specials";
 import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
+import { applyHookConstraint, stepHookBody, stepHookControl } from "./hook";
 
 export type SimPlayerConfig = {
   castId: string;
@@ -129,6 +130,9 @@ export function createSim(cfg: SimConfig): Sim {
       weaponCooldowns: {},
       hogFatCharge: pc.loadout.tonics.includes("hogfat"),
       prayer: 0,
+      hook: null,
+      hookCooldown: 0,
+      hookKick: 0,
       anim: "idle",
       animLock: 0,
       hicPitch: 1,
@@ -246,17 +250,25 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   const speedMult = p.loadout.tonics.includes("rocketfuel") ? 1.18 : 1;
   const maxSpeed = p.maxSpeed * speedMult;
 
-  // horizontal
-  const accel = p.grounded ? P_ACCEL : P_ACCEL * P_AIR_CONTROL;
+  // Fishin' Line: cast / reel / let go (Buford)
+  if (castById(p.castId).hook) stepHookControl(sim, p, cmd, prevCmd);
+  const swinging = p.hook !== null && p.hook.kind === "hold";
+
+  // horizontal. On the line you pump harder; off it, a launch past maxSpeed
+  // is kept (and bled off only on the ground) instead of clipped.
+  const accel = p.grounded ? P_ACCEL : P_ACCEL * (swinging ? 0.8 : P_AIR_CONTROL);
   if (left && !right) {
-    p.vx = Math.max(p.vx - accel, -maxSpeed);
+    p.vx = p.vx <= -maxSpeed ? p.vx : Math.max(p.vx - accel, -maxSpeed);
     p.facing = -1;
   } else if (right && !left) {
-    p.vx = Math.min(p.vx + accel, maxSpeed);
+    p.vx = p.vx >= maxSpeed ? p.vx : Math.min(p.vx + accel, maxSpeed);
     p.facing = 1;
   } else if (p.grounded) {
     if (p.vx > 0) p.vx = Math.max(0, p.vx - P_DECEL);
     else if (p.vx < 0) p.vx = Math.min(0, p.vx + P_DECEL);
+  }
+  if (p.grounded && !swinging && Math.abs(p.vx) > maxSpeed) {
+    p.vx = Math.sign(p.vx) * Math.max(maxSpeed, Math.abs(p.vx) - P_DECEL);
   }
 
   // jump buffering + coyote
@@ -272,14 +284,14 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.jumpBuffer = 0;
     emit(sim, { t: "sfx", name: "jump", pitch: 0.95 + sim.rng() * 0.1 });
   }
-  // variable jump height
-  if (!jump && p.vy < P_JUMP_CUT_VY) p.vy = P_JUMP_CUT_VY;
+  // variable jump height (a Fishin' Line launch is not a jump: leave it be)
+  if (!jump && p.vy < P_JUMP_CUT_VY && !swinging && p.hookKick <= 0) p.vy = P_JUMP_CUT_VY;
 
   // gravity
   p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
 
   // bubble riding/bouncing: check before tile move (bubbles are soft floors)
-  if (p.vy > 0) {
+  if (p.vy > 0 && !swinging) {
     for (const b of sim.bubbles) {
       if (b.state.kind === "launch") continue;
       if (b.age < 12) continue;
@@ -308,14 +320,19 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     }
   }
 
+  // the line goes taut
+  applyHookConstraint(p);
+
   // move through tiles
   const moved = moveBody(sim.level, p.x, p.y, p.vx, p.vy, P_WIDTH, P_HEIGHT);
   p.x = moved.x;
   p.y = moved.y;
   p.vy = moved.vy;
+  if (moved.hitWall && swinging) p.vx = 0;
   if (moved.grounded) p.grounded = true;
   else if (!p.grounded || p.vy !== 0) p.grounded = moved.grounded;
   if (moved.onSpikes && p.invuln <= 0 && p.prayer <= 0) hurtPlayer(sim, p);
+  if (p.hook || p.hookKick > 0) stepHookBody(sim, p, moved.grounded);
 
   // blow a bubble (the famous burp)
   if (p.blowCooldown > 0) p.blowCooldown--;
@@ -400,6 +417,8 @@ export function hurtPlayer(sim: Sim, p: PlayerState): void {
   }
   p.alive = false;
   p.frenzy = null;
+  p.hook = null;
+  p.hookKick = 0;
   p.livesLeft--;
   sim.deaths.push(p.index);
   emit(sim, { t: "sfx", name: "playerDie" });
@@ -452,6 +471,7 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
         e.phase = { kind: "trapped", bubbleId: b.id };
         e.vx = 0;
         e.vy = 0;
+        e.flung = 0;
         b.state = {
           kind: "trapped",
           enemyId: e.id,

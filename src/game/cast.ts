@@ -15,6 +15,10 @@ export type CastMember = {
   luck: number;
   /** Extra seconds of frenzy duration (Cooter's perk). */
   frenzyBonus?: number;
+  /** Carries the Fishin' Line grapple (Buford's perk). */
+  hook?: boolean;
+  /** Short perk label for the select screen. */
+  perkLabel?: string;
   /** Cleared-world count required before this character unlocks. */
   unlockWorlds: number;
 };
@@ -56,6 +60,7 @@ export const CAST: CastMember[] = [
     signatureWeapon: "jug",
     speed: 3, puff: 2, jump: 3, luck: 3,
     frenzyBonus: 2,
+    perkLabel: "LONG FRENZY",
     unlockWorlds: 0,
   },
   {
@@ -83,7 +88,10 @@ export const CAST: CastMember[] = [
     bio: "Once jumped the crick. The wide part.",
     signatureWeapon: "washboard",
     speed: 2, puff: 2, jump: 5, luck: 3,
-    unlockWorlds: 6,
+    hook: true,
+    perkLabel: "FISHIN' LINE",
+    // Was 6; opened up so the Fishin' Line can be play-tested from a fresh save.
+    unlockWorlds: 0,
   },
   {
     id: "zeke",

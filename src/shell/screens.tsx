@@ -2,7 +2,7 @@
 // path), world checkpoint select, leaderboards, settings, initials entry.
 // The shell is keyboard-and-click friendly; the game keys work everywhere.
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { AaSceneCharacter } from "@/lib/aachar/AaSceneCharacter";
 import { CAST, castById, type CastMember } from "../game/cast";
 import {
@@ -82,7 +82,7 @@ export function TitleScreen({
     <div className="flex h-screen flex-col items-center justify-center gap-5">
       <Marquee />
       <p className="font-pixel text-[10px] text-white/60">
-        A BUBBLE-BLOWIN' HOOTENANNY
+        A SHINE-BELCHIN' HOOTENANNY
       </p>
       <div className="mt-4 flex flex-col items-center gap-3">
         <MenuButton onClick={onPlay}>Play</MenuButton>
@@ -96,7 +96,7 @@ export function TitleScreen({
         </div>
       </div>
       <p className="absolute bottom-4 font-pixel text-[8px] text-white/30">
-        P1: WASD + F/G · P2: ARROWS + K/L · GAMEPADS WELCOME · ESC PAUSES
+        P1: WASD + F/G (H: FISHIN' LINE) · P2: ARROWS + K/L (J: LINE) · GAMEPADS WELCOME · ESC PAUSES
       </p>
     </div>
   );
@@ -145,6 +145,11 @@ function CastCard({
       {!locked && (
         <div className="mt-1 font-pixel text-[7px] text-[#ffd84a]">
           SPD{member.speed} PUF{member.puff} JMP{member.jump} LCK{member.luck}
+        </div>
+      )}
+      {!locked && member.perkLabel && (
+        <div className="mt-1 font-pixel text-[7px] text-[#9be8c8]">
+          {member.perkLabel}
         </div>
       )}
       {selected.map((pi) => (
@@ -297,18 +302,21 @@ export function ScoresScreen({ onBack }: { onBack: () => void }) {
             NO SCORES YET. GIT PICKIN'.
           </div>
         )}
-        {scores.map((s, i) => (
-          <div
-            key={i}
-            className="grid grid-cols-[1.75rem_3rem_1fr_2.25rem_auto] gap-2 py-1 font-pixel text-[10px]"
-          >
-            <span className="text-white/50">{i + 1}.</span>
-            <span className="text-[#ffd84a]">{s.initials}</span>
-            <span className="truncate text-white/70">{castById(s.cast).displayName.toUpperCase()}</span>
-            <span className="text-white/50">L{s.level}</span>
-            <span className="text-right text-white">{s.score.toLocaleString()}</span>
+        {scores.length > 0 && (
+          <div className="grid grid-cols-[1.75rem_3rem_1fr_2.25rem_4.5rem] items-center gap-x-2 gap-y-2 font-pixel text-[10px]">
+            {scores.map((s, i) => (
+              <Fragment key={i}>
+                <span className="text-white/50">{i + 1}.</span>
+                <span className="text-[#ffd84a]">{s.initials}</span>
+                <span className="truncate text-white/70">
+                  {castById(s.cast).displayName.toUpperCase()}
+                </span>
+                <span className="text-white/50">L{s.level}</span>
+                <span className="text-right text-white">{s.score.toLocaleString()}</span>
+              </Fragment>
+            ))}
           </div>
-        ))}
+        )}
       </div>
       <MenuButton subtle onClick={onBack}>
         BACK

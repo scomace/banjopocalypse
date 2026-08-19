@@ -249,7 +249,8 @@ export class PlayScene extends Phaser.Scene {
         s.setAlpha(1 - e.phase.ticks / 30);
       } else {
         s.setPosition(Math.round(e.x), Math.round(e.y + 13));
-        s.setAngle(0);
+        // flung by the Fishin' Line: tumbling head over tail
+        s.setAngle(e.flung > 0 ? Math.sign(e.vx || 1) * e.flung * 19 : 0);
         s.setAlpha(1);
         s.setFlipX(e.facing === 1);
       }
@@ -451,6 +452,42 @@ export class PlayScene extends Phaser.Scene {
         this.zoneGfx.lineTo(x, y);
       }
       this.zoneGfx.strokePath();
+    }
+
+    // Fishin' Line: rod stub + line + tackle
+    for (const p of sim.players) {
+      if (!p.alive || !p.hook) continue;
+      const h = p.hook;
+      const hx = p.x + p.facing * 6;
+      const hy = p.y - 40 * 0.62;
+      const tipX = h.kind === "hold" ? h.ax : h.x;
+      const tipY = h.kind === "hold" ? h.ay : h.y;
+      const dx = tipX - hx;
+      const dy = tipY - hy;
+      const d = Math.hypot(dx, dy) || 1;
+      // rod: a short cane pole toward the hook
+      const rodLen = Math.min(16, d);
+      this.zoneGfx.lineStyle(3, 0x8a5a2b, 1);
+      this.zoneGfx.lineBetween(hx, hy, hx + (dx / d) * rodLen, hy + (dy / d) * rodLen);
+      // line: taut while holding, a touch slack otherwise
+      this.zoneGfx.lineStyle(h.kind === "hold" ? 2 : 1, 0xf4f0d8, h.kind === "hold" ? 0.95 : 0.7);
+      if (h.kind === "hold") {
+        this.zoneGfx.lineBetween(hx, hy, tipX, tipY);
+      } else {
+        const mx = (hx + tipX) / 2;
+        const my = (hy + tipY) / 2 + Math.min(18, d * 0.08);
+        this.zoneGfx.beginPath();
+        this.zoneGfx.moveTo(hx, hy);
+        this.zoneGfx.lineTo(mx, my);
+        this.zoneGfx.lineTo(tipX, tipY);
+        this.zoneGfx.strokePath();
+      }
+      const tackle = this.obtain(`hook${p.index}`, "i:fishhook#0", 52);
+      tackle.setOrigin(0.5, 0.12);
+      tackle.setScale(2);
+      tackle.setPosition(Math.round(tipX), Math.round(tipY));
+      // tip-first in flight, dangling straight down once set
+      tackle.setAngle(h.kind === "hold" ? 0 : Math.atan2(dy, dx) * (180 / Math.PI) - 90);
     }
 
     // sweep unused sprites + texts

@@ -256,7 +256,9 @@ Title (attract-mode demo loop of AI playing L1) → Profile pick → Character s
 
 Dev-only routes (excluded from prod build flag but shippable behind `?dev=1`): `/admin/aachar` (full editor + vite save plugin), `/admin/exclaim` (burst lab), `/admin/level` (nice-to-have: paint ASCII grids visually; build only if time allows).
 
-Input: P1 WASD+F/G, P2 arrows+K/L (fully remappable), any 2 gamepads (Phaser gamepad API), pause = Esc/Start.
+Input: P1 WASD+F/G (+H: Fishin' Line), P2 arrows+K/L (+J: Fishin' Line) (fully remappable), any 2 gamepads (Phaser gamepad API; Y/RB/RT casts the line), pause = Esc/Start.
+
+Fishin' Line (Buford's perk, `cast.hook`): press HOOK to cast a cane-pole line up-and-forward. It auto-aims across five angles and bites the best platform/wall (most height, biased to ~50°); hold to swing while the reel shortens the line, release to fly off with your momentum, tap JUMP to hop off the line, or reel all the way in to hoist yourself over the snag. A hook that meets a varmint on the way out (or a swinging Buford's boots) sends it tumbling: harmless while airborne, bowls over kin it lands on, chips HP, and can still be bubbled mid-tumble. Sim lives in `sim/hook.ts`.
 
 ---
 

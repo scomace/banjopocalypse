@@ -4,6 +4,7 @@
 
 import {
   forwardRef,
+  useEffect,
   useImperativeHandle,
   useRef,
   useState,
@@ -28,16 +29,56 @@ type LiveBurst = {
   seed: number;
 };
 
+/** A balloon that re-anchors to its speaker every frame while it lives. */
+type LiveBalloon = {
+  el: HTMLDivElement;
+  player: number;
+  /** Last good anchor, held if the speaker stops existing mid-line. */
+  x: number;
+  y: number;
+};
+
+const BALLOON_TTL_MS = 1900;
+const BALLOON_LIFT = 52; // px above the player's feet-center origin
+
 let fxId = 1;
 
 export const FxOverlay = forwardRef<FxOverlayHandle>(function FxOverlay(_, ref) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [bursts, setBursts] = useState<LiveBurst[]>([]);
+  const simRef = useRef<Sim | null>(null);
+  const balloonsRef = useRef<LiveBalloon[]>([]);
+
+  // Follow loop: re-anchors every live balloon to its speaker each frame so
+  // the bubble travels with the character instead of pinning to the spot
+  // they happened to be standing on when the line fired. No-ops when nothing
+  // is speaking.
+  useEffect(() => {
+    let raf = 0;
+    const step = () => {
+      const live = balloonsRef.current;
+      const sim = simRef.current;
+      if (live.length > 0 && sim) {
+        for (const b of live) {
+          const anchor = anchorFor(sim, b.player);
+          if (anchor) {
+            b.x = anchor.x;
+            b.y = anchor.y;
+          }
+          placeBalloon(b.el, b.x, b.y);
+        }
+      }
+      raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   useImperativeHandle(ref, () => ({
     handleFx(events: FxEvent[], sim: Sim) {
       const root = rootRef.current;
       if (!root) return;
+      simRef.current = sim;
       for (const e of events) {
         if (e.t === "burst") {
           const burst: LiveBurst = {
@@ -57,9 +98,14 @@ export const FxOverlay = forwardRef<FxOverlayHandle>(function FxOverlay(_, ref) 
           );
         } else if (e.t === "balloon") {
           const p = sim.players.find((q) => q.index === e.player);
-          if (p && p.alive) {
+          // Note: the death bark is emitted right after p.alive flips false,
+          // so this must not gate on `alive`. Spectators stay silent.
+          if (p && !p.spectating) {
             const line = pickBark(p.castId, e.trigger);
-            if (line) spawnBalloon(root, line, p.x, p.y - 52, e.player);
+            const anchor = anchorFor(sim, e.player) ?? { x: p.x, y: p.y - BALLOON_LIFT };
+            if (line) {
+              spawnBalloon(root, balloonsRef.current, line, anchor, e.player);
+            }
           }
         } else if (e.t === "flash") {
           if (!loadSettings().reducedFlash) spawnFlash(root, e.color);
@@ -99,26 +145,43 @@ export const FxOverlay = forwardRef<FxOverlayHandle>(function FxOverlay(_, ref) 
   );
 });
 
-function pct(x: number, y: number): { left: string; top: string } {
-  return {
-    left: `${(x / FIELD_W) * 100}%`,
-    top: `${(y / FIELD_H) * 100}%`,
-  };
+/**
+ * Where player `index`'s balloon tail should sit right now: above the live
+ * body, above the drifting ghost bubble if they are down but revivable, or
+ * null if they have left the field entirely (balloon then holds its spot).
+ */
+function anchorFor(sim: Sim, index: number): { x: number; y: number } | null {
+  const p = sim.players.find((q) => q.index === index);
+  if (!p) return null;
+  if (p.alive) return { x: p.x, y: p.y - BALLOON_LIFT };
+  if (p.ghost) return { x: p.ghost.x, y: p.ghost.y - 34 };
+  return null;
+}
+
+function placeBalloon(el: HTMLElement, x: number, y: number): void {
+  const cx = Math.max(90, Math.min(FIELD_W - 90, x));
+  const cy = Math.max(50, Math.min(FIELD_H - 20, y));
+  el.style.left = `${(cx / FIELD_W) * 100}%`;
+  el.style.top = `${(cy / FIELD_H) * 100}%`;
 }
 
 function spawnBalloon(
   root: HTMLElement,
+  live: LiveBalloon[],
   text: string,
-  x: number,
-  y: number,
+  anchor: { x: number; y: number },
   player: number,
 ): void {
-  const existing = root.querySelector(`[data-balloon="${player}"]`);
-  if (existing) existing.remove();
+  // One balloon per speaker: a new line replaces the one still in the air.
+  for (let i = live.length - 1; i >= 0; i--) {
+    if (live[i].player === player) {
+      live[i].el.remove();
+      live.splice(i, 1);
+    }
+  }
   const el = document.createElement("div");
   el.dataset.balloon = String(player);
-  const pos = pct(Math.max(90, Math.min(FIELD_W - 90, x)), Math.max(50, y));
-  el.style.cssText = `position:absolute;left:${pos.left};top:${pos.top};transform:translate(-50%,-100%);
+  el.style.cssText = `position:absolute;transform:translate(-50%,-100%);
     font-family:'Press Start 2P',monospace;font-size:8px;line-height:1.5;color:#1d1409;
     background:#fdf8ea;border:2px solid #1d1409;border-radius:9px;padding:5px 8px;max-width:180px;
     text-align:center;animation:balloonIn 0.22s ease-out both;z-index:6;`;
@@ -133,9 +196,17 @@ function spawnBalloon(
   el.textContent = text;
   el.appendChild(tail);
   el.appendChild(tailFill);
+  placeBalloon(el, anchor.x, anchor.y);
   root.appendChild(el);
   ensureKeyframes(root);
-  setTimeout(() => el.remove(), 1900);
+
+  const entry: LiveBalloon = { el, player, x: anchor.x, y: anchor.y };
+  live.push(entry);
+  setTimeout(() => {
+    const i = live.indexOf(entry);
+    if (i >= 0) live.splice(i, 1);
+    el.remove();
+  }, BALLOON_TTL_MS);
 }
 
 function spawnFlash(root: HTMLElement, color: number): void {

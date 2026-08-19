@@ -19,7 +19,7 @@ export type TonicDef = { id: string; name: string; desc: string };
 export const TONICS: TonicDef[] = [
   { id: "grit", name: "Grit", desc: "Weapons hit 50% harder." },
   { id: "rocketfuel", name: "Rocket-Fuel Shine", desc: "Run 18% faster." },
-  { id: "lungbutter", name: "Lung Butter", desc: "Bubbles fly farther." },
+  { id: "lungbutter", name: "Lung Butter", desc: "Belches fly farther." },
   { id: "hogfat", name: "Hog Fat", desc: "Survive one hit per level." },
   { id: "rabbitfoot", name: "Lucky Rabbit Foot", desc: "More drops, more jars." },
   { id: "pickinfinger", name: "Extra Pickin' Finger", desc: "Frenzies last 5s longer." },

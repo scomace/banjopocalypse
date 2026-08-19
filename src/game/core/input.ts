@@ -7,6 +7,8 @@ export const CMD_LEFT = 1;
 export const CMD_RIGHT = 2;
 export const CMD_JUMP = 4;
 export const CMD_BLOW = 8;
+/** Buford's Fishin' Line: cast / hold to swing / release to let go. */
+export const CMD_HOOK = 16;
 
 export type InputCommand = number;
 
@@ -25,6 +27,7 @@ export type KeyBindings = {
   down: string[];
   jump: string[];
   blow: string[];
+  hook: string[];
 };
 
 export const DEFAULT_BINDINGS: [KeyBindings, KeyBindings] = [
@@ -35,6 +38,7 @@ export const DEFAULT_BINDINGS: [KeyBindings, KeyBindings] = [
     down: ["KeyS"],
     jump: ["KeyW", "KeyF"],
     blow: ["KeyG"],
+    hook: ["KeyH", "KeyE"],
   },
   {
     left: ["ArrowLeft"],
@@ -43,6 +47,7 @@ export const DEFAULT_BINDINGS: [KeyBindings, KeyBindings] = [
     down: ["ArrowDown"],
     jump: ["ArrowUp", "KeyK"],
     blow: ["KeyL"],
+    hook: ["KeyJ", "Semicolon"],
   },
 ];
 
@@ -58,6 +63,7 @@ export const SOLO_BINDINGS: [KeyBindings, KeyBindings] = [
     down: ["KeyS", "ArrowDown"],
     jump: ["KeyW", "KeyF", "ArrowUp", "Space"],
     blow: ["KeyG", "KeyL", "ShiftLeft"],
+    hook: ["KeyH", "KeyE", "KeyJ", "ShiftRight"],
   },
   DEFAULT_BINDINGS[1],
 ];
@@ -118,7 +124,8 @@ export class InputSampler {
       b.up.includes(code) ||
       b.down.includes(code) ||
       b.jump.includes(code) ||
-      b.blow.includes(code),
+      b.blow.includes(code) ||
+      b.hook.includes(code),
     );
   }
 
@@ -143,6 +150,7 @@ export class InputSampler {
     if (b.right.some((k) => this.down.has(k))) cmd |= CMD_RIGHT;
     if (b.jump.some((k) => this.down.has(k))) cmd |= CMD_JUMP;
     if (b.blow.some((k) => this.down.has(k))) cmd |= CMD_BLOW;
+    if (b.hook.some((k) => this.down.has(k))) cmd |= CMD_HOOK;
 
     const padIdx = this.padFor[player];
     if (padIdx >= 0) {
@@ -153,6 +161,7 @@ export class InputSampler {
         if (ax > 0.35 || pad.buttons[15]?.pressed) cmd |= CMD_RIGHT;
         if (pad.buttons[0]?.pressed) cmd |= CMD_JUMP; // A / cross
         if (pad.buttons[2]?.pressed || pad.buttons[1]?.pressed) cmd |= CMD_BLOW; // X/B
+        if (pad.buttons[3]?.pressed || pad.buttons[5]?.pressed || pad.buttons[7]?.pressed) cmd |= CMD_HOOK; // Y / RB / RT
       }
     }
     return cmd;
