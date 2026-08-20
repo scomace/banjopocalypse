@@ -54,6 +54,7 @@ export type PlayerState = {
   weaponCooldowns: Record<string, number>;
   // run-level flags mirrored into the sim for convenience
   hogFatCharge: boolean; // survive one hit this level
+  headStart: boolean; // Jar o' Lightnin' card: frenzy as the level opens
   prayer: number; // invincibility glow ticks (special bubble)
   // Fishin' Line (cast members with `hook`)
   hook: HookState | null;
@@ -114,6 +115,8 @@ export type Enemy = {
   /** >0 while sent flying by a Fishin' Line hit: tumbling, harmless, bowls over kin */
   flung: number;
   flungBy: 0 | 1;
+  /** Shrine guardians stay inside this box (center + half-extent). */
+  leash: { x: number; y: number; r: number } | null;
 };
 
 export type ProjectileKind =
@@ -259,6 +262,24 @@ export type FxEvent =
 
 export type SimStatus = "intro" | "play" | "cleared" | "allDead" | "bossDead";
 
+export type RelicId = "hootenanny" | "forbiddenstill";
+
+/** What a weapon shrine pedestal holds. */
+export type ShrineGift =
+  | { kind: "weapon"; weaponId: string }
+  | { kind: "relic"; relicId: RelicId };
+
+export type ShrineState = {
+  x: number; // feet of the pedestal row
+  y: number;
+  gifts: ShrineGift[]; // 1-2 pedestals, left to right
+  taken: number; // -1 until claimed, else the pedestal index
+  takenBy: 0 | 1;
+  guardianIds: number[];
+  /** "claim yer prize" reminder already shown */
+  nagged: boolean;
+};
+
 export type RevenuerState = {
   active: boolean;
   x: number;
@@ -301,6 +322,10 @@ export type Sim = {
   deaths: number[];
   secretDoorOpen: boolean;
   secretEntered: boolean;
+  /** weapon shrine (level 5 of each world), null elsewhere */
+  shrine: ShrineState | null;
+  /** set when a pedestal is claimed; the host shows the reveal and clears it */
+  shrineTaken: { player: 0 | 1; gift: ShrineGift } | null;
 };
 
 export type SimInputs = [number, number]; // InputCommand per player

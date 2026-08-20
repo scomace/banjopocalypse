@@ -5,6 +5,10 @@
 //   3. scripted "perfect play" pops on normal levels (chains, food, clear)
 //   4. all 9 bosses driven to death (phases, minions, duel, victory path)
 //   5. frenzy sweep: every weapon at L1/L5/evolved fires for 12s
+//   7. weapon shrines: all 9 shrine levels parse a W, guardians stay leashed,
+//      claiming grants the gift + a frenzy and releases the level-clear hold
+//   8. run layer: signature Lv1, hands are always 3 cards w/o newWeapon,
+//      shrine offers never repeat an owned weapon and go relic when full
 // Run: npx tsx scripts/sim-smoke.mts
 
 import { getLevelDef, levelCountCheck } from "../src/game/levels";
@@ -15,6 +19,17 @@ import type { Sim } from "../src/game/sim/types";
 import { WEAPONS } from "../src/game/sim/weapons";
 import { CAST } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
+import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
+import type { ShrineGift } from "../src/game/sim/types";
+import {
+  MAX_WEAPONS,
+  applyCard,
+  dealCards,
+  isShrineLevel,
+  newRun,
+  shrineGiftsFor,
+  type Card,
+} from "../src/game/run/run";
 
 let failures = 0;
 function fail(msg: string): void {
@@ -40,7 +55,12 @@ function finite(sim: Sim, ctx: string): void {
   if (sim.items.length > 300) fail(`${ctx}: item leak`);
 }
 
-function mkSim(level: number, weapons = [{ id: "twang", level: 2 }], castId = "earl") {
+function mkSim(
+  level: number,
+  weapons = [{ id: "twang", level: 2 }],
+  castId = "earl",
+  shrine: ShrineGift[] | null = null,
+) {
   return createSim({
     seed: 1234 + level,
     levelDef: getLevelDef(level),
@@ -56,6 +76,7 @@ function mkSim(level: number, weapons = [{ id: "twang", level: 2 }], castId = "e
       null,
     ],
     deathless: false,
+    shrine,
   });
 }
 
@@ -222,6 +243,129 @@ for (const w of WEAPONS) {
       fail(`weapon ${w.id} ${variant} crashed: ${err}`);
     }
   }
+}
+
+// ---- 7. weapon shrines ----
+console.log("[7] weapon shrines");
+for (let w = 1; w <= 9; w++) {
+  const lvl = (w - 1) * 11 + 5;
+  if (!isShrineLevel(lvl)) fail(`level ${lvl} should be a shrine level`);
+  const parsed = parseLevel(getLevelDef(lvl));
+  if (!parsed.shrine) {
+    fail(`shrine level ${lvl} has no W marker`);
+    continue;
+  }
+  const gifts: ShrineGift[] = [
+    { kind: "weapon", weaponId: "jug" },
+    { kind: "relic", relicId: "hootenanny" },
+  ];
+  const sim = mkSim(lvl, [{ id: "twang", level: 1 }], "earl", gifts);
+  try {
+    if (!sim.shrine) {
+      fail(`level ${lvl}: createSim dropped the shrine`);
+      continue;
+    }
+    const guardians = sim.enemies.filter((e) => e.leash);
+    if (guardians.length !== 3) fail(`level ${lvl}: ${guardians.length} guardians, want 3`);
+    // guardians stay fenced through a random-input run
+    const rng = mulberry32(77 + lvl);
+    let prev: [number, number] = [0, 0];
+    for (let t = 0; t < 900; t++) {
+      const cmd = (rng() < 0.4 ? 1 : 0) | (rng() < 0.4 ? 2 : 0) | (rng() < 0.25 ? 4 : 0) | (rng() < 0.3 ? 8 : 0);
+      const inputs: [number, number] = [cmd, 0];
+      step(sim, inputs, prev);
+      prev = inputs;
+      for (const e of sim.enemies) {
+        if (!e.leash || e.phase.kind !== "normal" || e.flung > 0) continue;
+        if (Math.abs(e.x - e.leash.x) > SHRINE_LEASH_R + 1) {
+          fail(`level ${lvl}: guardian ${e.kind} wandered to ${e.x.toFixed(0)} (shrine ${e.leash.x})`);
+          break;
+        }
+      }
+    }
+    // kill every enemy: the unclaimed shrine must hold the level open
+    for (const e of sim.enemies) {
+      e.phase = { kind: "dying", ticks: 0, targetX: e.x, targetY: e.y, chain: 1, toBoss: false };
+    }
+    for (let t = 0; t < 120; t++) step(sim, [0, 0], [0, 0]);
+    if (sim.status !== "play") fail(`level ${lvl}: cleared with the shrine unclaimed (${sim.status})`);
+    if (!sim.shrine.nagged) fail(`level ${lvl}: no claim-yer-prize nag`);
+    // claim pedestal 0: jug joins the arsenal at Lv1, frenzy lights with it
+    const p = sim.players[0];
+    takeShrine(sim, p, 0);
+    if (sim.shrine.taken !== 0) fail(`level ${lvl}: shrine not marked taken`);
+    if (!sim.shrineTaken || sim.shrineTaken.gift.kind !== "weapon") fail(`level ${lvl}: no shrineTaken event`);
+    if (!p.loadout.weapons.some((x) => x.id === "jug" && x.level === 1)) fail(`level ${lvl}: jug not granted`);
+    if (!p.frenzy || p.frenzy.weapon !== "jug") fail(`level ${lvl}: frenzy not lit with the new weapon`);
+    for (let t = 0; t < 240; t++) step(sim, [0, 0], [0, 0]);
+    if (sim.status !== "cleared") fail(`level ${lvl}: level did not clear after claiming (${sim.status})`);
+    finite(sim, `shrine ${lvl}`);
+  } catch (err) {
+    fail(`shrine level ${lvl} crashed: ${err}`);
+  }
+}
+// relic path: full arsenal, hootenanny levels everything, still evolves the best
+{
+  const six = WEAPONS.slice(0, 6).map((w) => ({ id: w.id, level: 3 }));
+  const sim = mkSim(5, six, "earl", [
+    { kind: "relic", relicId: "hootenanny" },
+    { kind: "relic", relicId: "forbiddenstill" },
+  ]);
+  for (let t = 0; t < 100; t++) step(sim, [0, 0], [0, 0]);
+  takeShrine(sim, sim.players[0], 0);
+  if (!sim.players[0].loadout.weapons.every((w) => w.level === 4)) fail("hootenanny did not level all weapons");
+  const sim2 = mkSim(5, six.map((w) => ({ ...w })), "earl", [{ kind: "relic", relicId: "forbiddenstill" }]);
+  for (let t = 0; t < 100; t++) step(sim2, [0, 0], [0, 0]);
+  takeShrine(sim2, sim2.players[0], 0);
+  if (sim2.players[0].loadout.evolved.length !== 1) fail("forbidden still did not evolve a weapon");
+  console.log("    shrines + relics ok");
+}
+
+// ---- 8. run layer: card hands + shrine offers ----
+console.log("[8] run layer hands + shrine offers");
+{
+  const run = newRun(4321, 1, ["earl", null]);
+  const pr = run.players[0]!;
+  if (pr.loadout.weapons.length !== 1 || pr.loadout.weapons[0].level !== 1) {
+    fail(`new run should start with one Lv1 signature weapon, got ${JSON.stringify(pr.loadout.weapons)}`);
+  }
+  // simulate 98 intermissions of "always take the Lv-up", claiming a shrine
+  // weapon at every shrine level, and check the hand shape throughout
+  const kinds = new Set<string>();
+  for (let lvl = 1; lvl <= 98; lvl++) {
+    run.levelIndex = lvl;
+    if (isShrineLevel(lvl)) {
+      const gifts = shrineGiftsFor(run);
+      if (gifts.length !== 2) fail(`level ${lvl}: shrine offers ${gifts.length} gifts, want 2`);
+      const owned = new Set(pr.loadout.weapons.map((w) => w.id));
+      for (const g of gifts) {
+        if (g.kind === "weapon" && owned.has(g.weaponId)) fail(`level ${lvl}: shrine re-offered owned ${g.weaponId}`);
+        if (g.kind === "weapon" && pr.loadout.weapons.length >= MAX_WEAPONS) fail(`level ${lvl}: offered a weapon to a full arsenal`);
+      }
+      const g0 = gifts[0];
+      if (g0.kind === "weapon") pr.loadout.weapons.push({ id: g0.weaponId, level: 1 });
+    } else if (shrineGiftsFor(run).length !== 0) {
+      fail(`level ${lvl}: non-shrine level offered gifts`);
+    }
+    const hand: Card[] = dealCards(run, pr);
+    if (hand.length !== 3) fail(`level ${lvl}: hand has ${hand.length} cards, want 3`);
+    const keys = hand.map((c) => JSON.stringify(c));
+    if (new Set(keys).size !== hand.length) fail(`level ${lvl}: duplicate cards in hand ${keys.join(" | ")}`);
+    if (hand.filter((c) => c.kind === "tonic").length > 1) fail(`level ${lvl}: more than one tonic in hand`);
+    for (const c of hand) kinds.add(c.kind);
+    if ((hand as { kind: string }[]).some((c) => c.kind === "newWeapon")) fail(`level ${lvl}: newWeapon card dealt`);
+    if (lvl <= 4 && !hand.some((c) => c.kind === "upgrade" && c.weaponId === "twang")) {
+      fail(`level ${lvl}: early hand is missing the signature Lv-up (${keys.join(" | ")})`);
+    }
+    applyCard(pr, hand.find((c) => c.kind === "upgrade") ?? hand[0]);
+  }
+  if (pr.loadout.weapons.length !== MAX_WEAPONS) fail(`expected a full arsenal by level 98, got ${pr.loadout.weapons.length}`);
+  console.log(`    hands ok; card kinds seen: ${[...kinds].sort().join(", ")}`);
+  // full arsenal across a co-op party: relics only
+  const coop = newRun(99, 60, ["earl", "buford"]);
+  for (const p of coop.players) if (p) p.loadout.weapons = WEAPONS.slice(0, 6).map((w) => ({ id: w.id, level: 2 }));
+  const relics = shrineGiftsFor(coop);
+  if (!relics.every((g) => g.kind === "relic")) fail("full arsenal shrine should offer relics only");
 }
 
 // ---- 6. cast sanity ----

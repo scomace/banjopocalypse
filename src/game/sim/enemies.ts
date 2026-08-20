@@ -90,6 +90,7 @@ export function spawnEnemy(sim: Sim, kind: EnemyKind, x: number, y: number): Ene
     hitFlash: 0,
     flung: 0,
     flungBy: 0,
+    leash: null,
   };
 }
 
@@ -179,8 +180,8 @@ function stepOne(sim: Sim, e: Enemy): boolean {
     case "walker": {
       e.vx = e.facing * speed;
       if (!groundAhead(sim.level, e.x, e.y, e.facing, 16) && e.grounded) {
-        // hop gaps sometimes, else turn
-        if (sim.rng() < 0.35) {
+        // hop gaps sometimes, else turn (guardians never leave their perch)
+        if (!e.leash && sim.rng() < 0.35) {
           e.vy = -5.4;
           e.grounded = false;
         } else {
@@ -348,7 +349,34 @@ function stepOne(sim: Sim, e: Enemy): boolean {
   return liveChecks(sim, e);
 }
 
+/** Shrine guardians pace a box around their pedestal; the box wins. */
+function applyLeash(e: Enemy): void {
+  const l = e.leash;
+  if (!l) return;
+  if (e.x > l.x + l.r) {
+    e.x = l.x + l.r;
+    e.facing = -1;
+    if (e.vx > 0) e.vx = -e.vx;
+    if (e.mode === 1) e.mode = 0; // a charger's dash ends at the fence
+  } else if (e.x < l.x - l.r) {
+    e.x = l.x - l.r;
+    e.facing = 1;
+    if (e.vx < 0) e.vx = -e.vx;
+    if (e.mode === 1) e.mode = 0;
+  }
+  if (e.flying) {
+    if (e.y > l.y + l.r) {
+      e.y = l.y + l.r;
+      if (e.vy > 0) e.vy = -e.vy * 0.5;
+    } else if (e.y < l.y - l.r) {
+      e.y = l.y - l.r;
+      if (e.vy < 0) e.vy = -e.vy * 0.5;
+    }
+  }
+}
+
 function liveChecks(sim: Sim, e: Enemy): boolean {
+  if (e.leash) applyLeash(e);
   // player contact
   for (const p of sim.players) {
     if (!p.alive || p.invuln > 0) continue;

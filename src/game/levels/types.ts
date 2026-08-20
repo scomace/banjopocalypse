@@ -11,6 +11,7 @@
 //   <  leftward wind       >  rightward wind
 //   J  preferred mason-jar spawn point
 //   S  secret warp-cellar door location (only appears on deathless runs)
+//   W  weapon shrine (level 5 of every world): two pedestals + leashed guardians
 //
 // Wind: bubbles in a plain column drift gently up and toward the top center;
 // wind tiles overwrite that with their own vector for their whole column/row
@@ -76,6 +77,8 @@ export type ParsedLevel = {
   enemySpawns: { kind: EnemyKind; x: number; y: number }[];
   jarPoints: { x: number; y: number }[];
   secretDoor: { x: number; y: number } | null;
+  /** weapon shrine anchor (feet of the pedestal row), if authored */
+  shrine: { x: number; y: number } | null;
 };
 
 export const T_EMPTY = 0;

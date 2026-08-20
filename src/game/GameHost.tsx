@@ -12,7 +12,8 @@ import { getLevelDef } from "./levels";
 import { isBossLevel, worldForLevel } from "./levels/worlds";
 import { deriveSeed } from "./core/rng";
 import { createSim, type SimConfig } from "./sim/sim";
-import type { FxEvent, Sim } from "./sim/types";
+import { takeShrine } from "./sim/shrine";
+import type { FxEvent, ShrineGift, Sim } from "./sim/types";
 import { LEVEL_CLEAR_TICKS } from "./sim/constants";
 import {
   addScore,
@@ -21,6 +22,7 @@ import {
   collectLetter,
   dealCards,
   newRun,
+  shrineGiftsFor,
   type Card,
   type RunState,
 } from "./run/run";
@@ -30,11 +32,14 @@ import { HudOverlay } from "./ui/HudOverlay";
 import { IntermissionOverlay } from "./ui/IntermissionOverlay";
 import { GameOverOverlay } from "./ui/GameOverOverlay";
 import { LevelIntroOverlay } from "./ui/LevelIntroOverlay";
+import { WeaponAcquiredOverlay } from "./ui/WeaponAcquiredOverlay";
 import { FxOverlay, type FxOverlayHandle } from "./fx/FxOverlay";
 import { saveCheckpoint } from "./core/save";
 
 export type GameFlow =
-  | { kind: "playing" }
+  /** `resume`: back from a mid-level hold (shrine reveal) — no level intro */
+  | { kind: "playing"; resume?: boolean }
+  | { kind: "acquired"; gift: ShrineGift; player: number }
   | { kind: "intermission"; cards: (Card[] | null)[]; picked: (Card | null)[] }
   | { kind: "continue" }
   | { kind: "gameover"; won: boolean }
@@ -53,6 +58,8 @@ class RunController {
   onFlow: (flow: GameFlow) => void = () => {};
   fxSink: (events: FxEvent[]) => void = () => {};
   private clearedHandled = false;
+  /** Sim is frozen mid-level for a reveal (set synchronously — React lags a frame). */
+  held = false;
 
   constructor(castIds: (string | null)[], startLevel: number, seed: number) {
     this.run = newRun(seed, startLevel, castIds);
@@ -70,12 +77,16 @@ class RunController {
       isBoss: isBossLevel(idx),
       players: this.run.players.map((pr) =>
         pr
-          ? { castId: pr.castId, loadout: pr.loadout, livesLeft: pr.lives }
+          ? { castId: pr.castId, loadout: pr.loadout, livesLeft: pr.lives, headStart: pr.headStart }
           : null,
       ),
       deathless: this.run.deathlessThisWorld,
+      shrine: shrineGiftsFor(this.run),
     };
     this.clearedHandled = false;
+    this.held = false;
+    // Jar o' Lightnin' is one level only; the sim has its copy now
+    for (const pr of this.run.players) if (pr) pr.headStart = false;
     return createSim(cfg);
   }
 
@@ -106,6 +117,14 @@ class RunController {
         const pr = this.run.players[d];
         if (pr) pr.lives = Math.max(0, pr.lives - 1);
       }
+    }
+    // shrine claimed: the sim already handed out the gift (loadouts are
+    // shared objects) and lit the frenzies; hold it and show the card
+    if (sim.shrineTaken) {
+      const ev = sim.shrineTaken;
+      sim.shrineTaken = null;
+      this.held = true;
+      this.onFlow({ kind: "acquired", gift: ev.gift, player: ev.player });
     }
 
     // flow transitions
@@ -143,6 +162,12 @@ class RunController {
       pr && pr.lives > 0 ? dealCards(this.run, pr) : null,
     );
     this.onFlow({ kind: "intermission", cards, picked: [null, null] });
+  }
+
+  /** Dismiss the shrine reveal: back into the level, frenzy already running. */
+  resume(): void {
+    this.held = false;
+    this.onFlow({ kind: "playing", resume: true });
   }
 
   pickCard(player: number, card: Card): void {
@@ -225,7 +250,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     if (!baked || !containerRef.current || gameRef.current) return;
     controller.onFlow = (f) => {
       setFlow(f);
-      if (f.kind === "playing") setIntroKey((k) => k + 1);
+      if (f.kind === "playing" && !f.resume) setIntroKey((k) => k + 1);
     };
     const game = createPhaserGame(
       containerRef.current,
@@ -246,7 +271,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
           controller.tick();
           audio.tickMusic(controller.sim);
         },
-        paused: () => pausedRef.current,
+        paused: () => pausedRef.current || controller.held,
       },
       baked,
     );
@@ -261,7 +286,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baked]);
 
-  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = jar)
+  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
   useEffect(() => {
     const dev = new URLSearchParams(window.location.search).has("quickstart");
     const h = (e: KeyboardEvent) => {
@@ -291,6 +316,9 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
             ticksLeft: 20 * 60,
           };
         }
+      } else if (e.code === "Digit8") {
+        const p = sim.players[0];
+        if (p && sim.shrine && sim.shrine.taken < 0) takeShrine(sim, p, 0);
       }
     };
     window.addEventListener("keydown", h);
@@ -306,8 +334,17 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
         <div ref={containerRef} className="absolute inset-0" />
         <FxOverlay ref={fxRef} />
         {ready && <HudOverlay controller={controller} />}
-        {ready && flow.kind === "playing" && (
+        {ready && (flow.kind === "playing" || flow.kind === "acquired") && (
           <LevelIntroOverlay key={introKey} controller={controller} />
+        )}
+        {flow.kind === "acquired" && (
+          <WeaponAcquiredOverlay
+            gift={flow.gift}
+            player={flow.player}
+            castId={controller.run.players[flow.player]?.castId ?? castIds.find(Boolean) ?? "earl"}
+            coop={!solo}
+            onDone={() => controller.resume()}
+          />
         )}
         {flow.kind === "intermission" && (
           <IntermissionOverlay

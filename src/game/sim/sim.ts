@@ -32,6 +32,7 @@ import {
   LEVEL_INTRO_TICKS,
   P_ACCEL,
   P_AIR_CONTROL,
+  P_CEILING_Y,
   P_DECEL,
   P_GRAVITY,
   P_HEIGHT,
@@ -43,6 +44,7 @@ import {
   P_RESPAWN_TICKS,
   P_WIDTH,
   SCORE_POP_BASE,
+  SPECIAL_FIRST_TICKS,
   SPECIAL_INTERVAL_TICKS,
   TICK_HZ,
   TILE,
@@ -62,6 +64,7 @@ import type {
   Item,
   Loadout,
   PlayerState,
+  ShrineGift,
   Sim,
   SimInputs,
 } from "./types";
@@ -71,11 +74,14 @@ import { spawnSpecial, stepSpecialsAndZones } from "./specials";
 import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
 import { applyHookConstraint, stepHookBody, stepHookControl } from "./hook";
+import { createShrine, nagShrine, shrineHoldsLevel, stepShrine } from "./shrine";
 
 export type SimPlayerConfig = {
   castId: string;
   loadout: Loadout;
   livesLeft: number;
+  /** Jar o' Lightnin' card: open the level already in a frenzy */
+  headStart?: boolean;
 };
 
 export type SimConfig = {
@@ -87,6 +93,8 @@ export type SimConfig = {
   players: (SimPlayerConfig | null)[];
   /** run has been deathless this world -> secret door may appear on boss level */
   deathless: boolean;
+  /** weapon shrine pedestals for this level (level 5 of a world), else absent */
+  shrine?: ShrineGift[] | null;
 };
 
 export function createSim(cfg: SimConfig): Sim {
@@ -129,6 +137,7 @@ export function createSim(cfg: SimConfig): Sim {
       frenzy: null,
       weaponCooldowns: {},
       hogFatCharge: pc.loadout.tonics.includes("hogfat"),
+      headStart: !!pc.headStart && pc.livesLeft > 0,
       prayer: 0,
       hook: null,
       hookCooldown: 0,
@@ -161,7 +170,7 @@ export function createSim(cfg: SimConfig): Sim {
     revenuer: { active: false, x: -60, y: 60, vx: 0, vy: 0 },
     nextId: 1,
     nextJarTick: Math.floor(JAR_INTERVAL_TICKS * (0.5 + rng() * 0.5)),
-    nextSpecialTick: Math.floor(SPECIAL_INTERVAL_TICKS * (0.6 + rng() * 0.6)),
+    nextSpecialTick: Math.floor(SPECIAL_FIRST_TICKS * (0.8 + rng() * 0.6)),
     chains: [
       { count: 0, lastTick: -9999 },
       { count: 0, lastTick: -9999 },
@@ -173,6 +182,8 @@ export function createSim(cfg: SimConfig): Sim {
     deaths: [],
     secretDoorOpen: cfg.deathless && cfg.isBoss && level.secretDoor !== null,
     secretEntered: false,
+    shrine: null,
+    shrineTaken: null,
   };
 
   // Enemies present from tick 0 (non-boss levels).
@@ -180,6 +191,9 @@ export function createSim(cfg: SimConfig): Sim {
     for (const s of level.enemySpawns) {
       sim.enemies.push(spawnEnemy(sim, s.kind, s.x, s.y));
     }
+  }
+  if (cfg.shrine && cfg.shrine.length > 0 && !cfg.isBoss) {
+    sim.shrine = createShrine(sim, cfg.shrine);
   }
   return sim;
 }
@@ -331,6 +345,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (moved.hitWall && swinging) p.vx = 0;
   if (moved.grounded) p.grounded = true;
   else if (!p.grounded || p.vy !== 0) p.grounded = moved.grounded;
+  // bonk the sky (never on a wrap: that enters from above, already falling)
+  if (p.vy < 0 && p.y < P_CEILING_Y) {
+    p.y = P_CEILING_Y;
+    p.vy = 0;
+  }
   if (moved.onSpikes && p.invuln <= 0 && p.prayer <= 0) hurtPlayer(sim, p);
   if (p.hook || p.hookKick > 0) stepHookBody(sim, p, moved.grounded);
 
@@ -724,7 +743,15 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
 
   if (sim.status === "intro") {
     sim.statusTicks--;
-    if (sim.statusTicks <= 0) sim.status = "play";
+    if (sim.statusTicks <= 0) {
+      sim.status = "play";
+      // Jar o' Lightnin': the level opens with the jar already in hand
+      for (const p of sim.players) {
+        if (!p.headStart || !p.alive || p.loadout.weapons.length === 0) continue;
+        p.headStart = false;
+        startFrenzy(sim, p, rangeInt(sim.rng, 0, p.loadout.weapons.length - 1));
+      }
+    }
     return;
   }
   if (sim.status === "cleared" || sim.status === "bossDead") {
@@ -745,6 +772,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepWeapons(sim);
   stepItems(sim);
   stepJars(sim);
+  stepShrine(sim);
 
   // specials cadence (never on boss levels' final phase; still fun mid-boss)
   if (sim.tick >= sim.nextSpecialTick && sim.specials.length < 2) {
@@ -756,8 +784,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   if (sim.boss) stepBoss(sim);
   stepRevenuer(sim);
 
-  // ---- status transitions ----
-  const anyAlive = sim.players.some((p) => p.alive || p.ghost);
+  const anyAlive = sim.players.some((p) => p.alive || p.ghost || p.respawnIn > 0);
   if (!anyAlive) {
     sim.status = "allDead";
     return;
@@ -772,7 +799,10 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
     const enemiesLeft = sim.enemies.some(
       (e) => e.phase.kind === "normal" || e.phase.kind === "trapped",
     );
-    if (!enemiesLeft && sim.status === "play") {
+    if (!enemiesLeft && sim.status === "play" && shrineHoldsLevel(sim)) {
+      // varmints gone, prize unclaimed: hold the level open and point at it
+      nagShrine(sim);
+    } else if (!enemiesLeft && sim.status === "play") {
       sim.status = "cleared";
       sim.statusTicks = LEVEL_CLEAR_TICKS;
       sim.revenuer.active = false;

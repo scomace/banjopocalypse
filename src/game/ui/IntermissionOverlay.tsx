@@ -124,7 +124,7 @@ export function IntermissionOverlay({
                     }}
                   >
                     <div className="font-pixel text-[9px] text-[#ffd84a]">
-                      {card.kind === "evolve" ? "★ EVOLUTION ★" : card.kind === "newWeapon" ? "NEW WEAPON" : card.kind === "tonic" ? "TONIC" : "UPGRADE"}
+                      {card.kind === "evolve" ? "★ EVOLUTION ★" : card.kind === "tonic" ? "TONIC" : card.kind === "upgrade" ? "UPGRADE" : "BONUS"}
                     </div>
                     <div className="mt-1 font-display text-lg uppercase leading-tight text-white">
                       {cardTitle(card)}

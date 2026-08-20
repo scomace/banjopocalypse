@@ -22,6 +22,7 @@ import {
   HOOK_MIN_LEN,
   HOOK_POWER,
   HOOK_RANGE,
+  HOOK_HOP_VY,
   HOOK_REEL,
   HOOK_RETRACT_SPEED,
   HOOK_SPEED,
@@ -113,7 +114,10 @@ function letGo(sim: Sim, p: PlayerState, hop: boolean): void {
   p.hookCooldown = HOOK_COOLDOWN;
   p.hookKick = LAUNCH_GRACE;
   if (hop) {
-    p.vy = Math.min(p.vy, 0) - 6.2;
+    // A dismount SETS a launch, it does not stack on whatever the swing had
+    // already built up — otherwise a taut line off a ceiling-high bubble
+    // throws you clean out of the playfield.
+    p.vy = Math.max(HOOK_HOP_VY, Math.min(p.vy, 0) - 6.2);
     emit(sim, { t: "sfx", name: "jump", pitch: 1.1 });
   } else {
     emit(sim, { t: "sfx", name: "lineSlack" });

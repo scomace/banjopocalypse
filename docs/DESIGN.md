@@ -121,13 +121,23 @@ Auto-unlock at each world start (levels 1, 12, 23…). New runs start at any unl
 - Each player's frenzy is independent; simultaneous double-frenzy is a design goal, not a bug.
 - Frenzy power = the weapon's current upgrade level (persistent within the run).
 
+### Weapon shrines (confirmed: the only source of new weapons)
+You start a run with **only your signature weapon, at Lv1**. New weapons come from the **Weapon Shrine** on **level 5 of every world** (`W` in the level grid): two glowing pedestals under light beams, ringed by **three leashed guardians** (the level's own critters, pinned to ±3 tiles of the shrine). Touch a pedestal and:
+
+1. **Everyone in the party gets that weapon at Lv1** (co-op shares the pick - whoever touches, chooses).
+2. Sim holds, full-screen **WEAPON ACQUIRED** card: slam-in title, 8× weapon icon on a ray burst, weapon name, one-liner. Any key dismisses.
+3. Every living player's **frenzy lights immediately with the new weapon** - the guardians are the test drive.
+4. The other pedestal shatters. An unclaimed shrine **holds the level open** (`CLAIM YER PRIZE!` once the varmints are gone), so a shrine is never wasted.
+
+Offers are seeded from (run seed, level), exclude anything the party already owns, and switch to **relics** once anyone's arsenal is full (6): **The Hootenanny** (every weapon +1 Lv) or **The Forbidden Still** (evolve your highest-level unevolved weapon outright). Five shrine picks fill the arsenal by world 5; worlds 6–9 hand out relics.
+
 ### Upgrades (confirmed: between levels)
 After every level clear, each player picks **1 of 3 cards** (both players pick simultaneously on a split intermission screen):
-- **New weapon** - adds to arsenal (max arsenal 6; offering respects the cap)
 - **Weapon upgrade** - level N→N+1 (max 5); at level 5, its **Evolution** card can appear (requires the paired tonic owned, VS-style)
 - **Tonic** - passive stat (max 4 tonics)
+- **Bonus** fillers, so a hand is always three real choices: **Spare Overalls** (+1 life), **Jar o' Lightnin'** (next level opens in a frenzy), **Coffee Can Savings** (+10,000 pts)
 
-One free reroll per world. Card odds: 45% upgrade / 30% new weapon / 25% tonic, seeded PRNG.
+Hand shape: one weapon card whenever one exists, **at most one tonic** (always offered while you hold a single weapon, 65% once Lv-ups compete), then more weapon cards, then bonuses. Levels 1–4 read `Lv-up / tonic / bonus` - four Lv-ups max the signature right as shrine #1 arrives. One free reroll per world, seeded PRNG (rerolls can't fish for shrine offers).
 
 ### The arsenal (12 weapons)
 
@@ -155,7 +165,7 @@ Evolution pairings (weapon → required tonic): Good Book→Spectacles, Twang→
 
 ## 6. The cast (8 preset characters - confirmed preset-only, creator later)
 
-All built in the aachar editor as manifest characters tagged `banjo-cast`. Stats are pips 1–5: Speed / Puff (bubble range) / Jump / Luck (drops & jar odds). Signature weapon = always in arsenal from level 1 and starts at L2.
+All built in the aachar editor as manifest characters tagged `banjo-cast`. Stats are pips 1–5: Speed / Puff (bubble range) / Jump / Luck (drops & jar odds). Signature weapon = always in arsenal from level 1 and starts at L1 (the only weapon until the first shrine).
 
 **Base art (confirmed by Scott):** the 8 cast members are built from these existing accountingsurvivor manifest characters: **Lou, Ida, Adventurer, Adventurer2, Adventurer3, afsdf, Zed2, Zeddington**. Copy them into this project's manifest, rename to the game names below, and ignore their existing item-slot (weapon/weapon2) picks; signature weapons are game systems, not aachar items. The mapping below is provisional; eyeball each rig during the build and swap pairings if a body reads better for a different personality.
 

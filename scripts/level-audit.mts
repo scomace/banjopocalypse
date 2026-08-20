@@ -19,7 +19,7 @@ import {
   TILE,
 } from "../src/game/sim/constants";
 import { CAST, castJumpMult } from "../src/game/cast";
-import { worldForLevel } from "../src/game/levels/worlds";
+import { isBossLevel, worldForLevel } from "../src/game/levels/worlds";
 import { createSim, step } from "../src/game/sim/sim";
 
 // ---- jump arc, integrated exactly the way sim.ts does it -------------------
@@ -53,6 +53,19 @@ function reachAt(need: number): number {
 
 const SAFETY = 6; // px of headroom demanded over the bare-minimum arc
 
+/** Horizontal px you can cover while falling `rows` tiles from a standstill. */
+function fallReach(rows: number): number {
+  let v = 0;
+  let h = 0;
+  let t = 0;
+  while (h < rows * TILE && t < 400) {
+    v = Math.min(v + P_GRAVITY, P_MAX_FALL);
+    h += v;
+    t++;
+  }
+  return t * P_MAX_SPEED;
+}
+
 // ---- surfaces --------------------------------------------------------------
 type Run = {
   id: number;
@@ -67,14 +80,13 @@ function standable(t: number): boolean {
 
 function buildRuns(col: Uint8Array[]): Run[] {
   const runs: Run[] = [];
-  for (let y = 0; y < GRID_H; y++) {
+  // Row 0 is the ceiling line, never a surface: a 40px-tall body standing there
+  // has its head at y=-40, entirely off the playfield.
+  for (let y = 1; y < GRID_H; y++) {
     let start = -1;
     for (let x = 0; x <= GRID_W; x++) {
       // a tile is stand-on-able if it is solid-ish and the tile above is not solid
-      const ok =
-        x < GRID_W &&
-        standable(col[y][x]) &&
-        (y === 0 || col[y - 1][x] !== T_SOLID);
+      const ok = x < GRID_W && standable(col[y][x]) && col[y - 1][x] !== T_SOLID;
       if (ok && start < 0) start = x;
       else if (!ok && start >= 0) {
         runs.push({ id: runs.length, row: y, c0: start, c1: x - 1 });
@@ -128,8 +140,9 @@ function edges(col: Uint8Array[], runs: Run[]): Map<number, number[]> {
       } else if (dRows === 0) {
         ok = gap <= reachAt(SAFETY);
       } else {
-        // dropping down: generous, you just walk off and steer
-        ok = gap <= TILE * 6;
+        // dropping down: you run off the edge at full tilt, but you only get
+        // as much horizontal drift as the fall lasts.
+        ok = gap <= fallReach(-dRows);
       }
       if (ok) g.get(a.id)!.push(b.id);
     }
@@ -179,8 +192,35 @@ type Report = {
   totalRuns: number;
   orphanRuns: Run[];
   strandedEnemies: { kind: string; x: number; y: number }[];
+  /** unreachable wall bumps, tolerated as decoration but counted */
+  textureCount: number;
+  contentErrors: string[];
   worstGap: number; // largest rows the level asks you to jump on the main path
 };
+
+/**
+ * Data invariants that reachability alone will not catch: a spawn letter that
+ * was never declared parses to nothing, and a player spawned off the floor row
+ * starts the level falling. Both are silent in-game.
+ */
+function contentProblems(level: number, def: ReturnType<typeof getLevelDef>, p: ReturnType<typeof parseLevel>): string[] {
+  const out: string[] = [];
+  const drawn = new Set<string>();
+  for (const row of def.grid) for (const ch of row) if ("abcd".includes(ch)) drawn.add(ch);
+  for (const ch of drawn) {
+    if (!def.enemies[ch as "a"]) out.push(`spawn letter '${ch}' is undeclared (parses to nothing)`);
+  }
+  const boss = isBossLevel(level);
+  if (!boss && p.enemySpawns.length < 3) out.push(`only ${p.enemySpawns.length} enemies`);
+  if (boss && p.enemySpawns.length) out.push(`boss level has ${p.enemySpawns.length} authored enemies`);
+  const inWorld = ((level - 1) % 11) + 1;
+  if (inWorld === 5 && !p.shrine) out.push("level 5 has no W shrine");
+  if (inWorld !== 5 && p.shrine) out.push("shrine outside level 5");
+  for (const [who, s] of [["p1", p.spawns.p1], ["p2", p.spawns.p2]] as const) {
+    if (s.y !== (GRID_H - 1) * TILE) out.push(`${who} spawns on row ${s.y / TILE - 1}, want 15 (on the floor)`);
+  }
+  return out;
+}
 
 function audit(level: number): Report {
   const def = getLevelDef(level);
@@ -208,7 +248,14 @@ function audit(level: number): Report {
     }
   }
 
-  const orphanRuns = runs.filter((r) => !seen.has(r.id));
+  // A 1-2 tile bump flush against an outer wall is cavern texture, not a
+  // platform: nothing spawns on it and nothing can be stranded there. Real
+  // platforms (3+ wide, or anywhere off the wall) are still errors.
+  const isWallTexture = (r: Run) =>
+    r.c1 - r.c0 + 1 <= 2 && (r.c0 <= 1 || r.c1 >= GRID_W - 2);
+  const unreached = runs.filter((r) => !seen.has(r.id));
+  const orphanRuns = unreached.filter((r) => !isWallTexture(r));
+  const textureCount = unreached.length - orphanRuns.length;
   const strandedEnemies = parsed.enemySpawns.filter((e) => {
     const r = runUnder(runs, e.x, e.y);
     return r ? !seen.has(r.id) : false;
@@ -233,6 +280,8 @@ function audit(level: number): Report {
     totalRuns: runs.length,
     orphanRuns,
     strandedEnemies: strandedEnemies.map((e) => ({ kind: e.kind, x: e.x, y: e.y })),
+    textureCount,
+    contentErrors: contentProblems(level, def, parsed),
     worstGap,
   };
 }
@@ -306,6 +355,7 @@ const drift = verifyModel();
 console.log(drift.length ? `MODEL CHECK: ${drift.join("; ")}\n` : "model checked against live sim: ok\n");
 
 let bad = 0;
+let totalTexture = 0;
 const lo = wantWorld ? (wantWorld - 1) * 11 + 1 : 1;
 const hi = wantWorld ? wantWorld * 11 : 99;
 for (let lvl = lo; lvl <= hi; lvl++) {
@@ -323,6 +373,8 @@ for (let lvl = lo; lvl <= hi; lvl++) {
     );
   if (r.strandedEnemies.length)
     problems.push(`${r.strandedEnemies.length} stranded enemies`);
+  problems.push(...r.contentErrors);
+  totalTexture += r.textureCount;
   if (problems.length) {
     bad++;
     console.log(`  ${tag.padEnd(5)} ${problems.join("; ")}`);
@@ -338,6 +390,7 @@ for (let lvl = lo; lvl <= hi; lvl++) {
 
 console.log(
   bad === 0
-    ? `\nLEVEL AUDIT: all ${hi - lo + 1} levels fully reachable`
+    ? `\nLEVEL AUDIT: all ${hi - lo + 1} levels reachable and intact` +
+        (totalTexture ? ` (${totalTexture} decorative wall bumps ignored)` : "")
     : `\nLEVEL AUDIT: ${bad}/${hi - lo + 1} levels have problems`,
 );

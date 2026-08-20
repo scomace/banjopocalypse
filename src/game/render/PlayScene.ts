@@ -36,6 +36,8 @@ import {
   SPECIAL_SPRITES,
 } from "./sprites-items";
 import { SPR_JAR } from "./pixelart";
+import { RELIC_ICONS, SPR_PEDESTAL, WEAPON_ICONS, giftIcon } from "./sprites-weapons";
+import { pedestalX } from "../sim/shrine";
 
 export type PlaySceneHooks = {
   sampler: InputSampler;
@@ -91,6 +93,9 @@ export class PlayScene extends Phaser.Scene {
     for (const [key, spr] of Object.entries(PROJECTILE_SPRITES)) registerPixel(this, `p:${key}`, spr);
     for (const [key, spr] of Object.entries(MISC_ITEM_SPRITES)) registerPixel(this, `i:${key}`, spr);
     registerPixel(this, "i:jar", SPR_JAR);
+    registerPixel(this, "i:pedestal", SPR_PEDESTAL);
+    for (const [key, spr] of Object.entries(WEAPON_ICONS)) registerPixel(this, `wi:${key}`, spr);
+    for (const [key, spr] of Object.entries(RELIC_ICONS)) registerPixel(this, `ri:${key}`, spr);
     for (const [name, b] of this.baked) registerBaked(this, `cast:${name}`, b);
 
     this.zoneGfx = this.add.graphics().setDepth(30);
@@ -256,7 +261,39 @@ export class PlayScene extends Phaser.Scene {
       }
       if (e.hitFlash > 0 && t % 4 < 2) s.setTintFill(0xffffff);
       else if (e.angry) s.setTint(0xff9070);
+      else if (e.leash) s.setTint(0xffe9a8); // shrine guardian: touched by the glow
       else s.clearTint();
+    }
+
+    // weapon shrine: pedestals, bobbing gifts, a beam you can see across the map
+    if (sim.shrine) {
+      const sh = sim.shrine;
+      for (let i = 0; i < sh.gifts.length; i++) {
+        const px = pedestalX(sh, i);
+        const ped = this.obtain(`shped${i}`, "i:pedestal#0", 38);
+        ped.setOrigin(0.5, 1);
+        ped.setScale(2);
+        ped.setPosition(Math.round(px), Math.round(sh.y));
+        const live = sh.taken < 0;
+        const mine = sh.taken === i;
+        // the unpicked pedestal shatters: dim, cracked-looking, no gift
+        ped.setAlpha(live || mine ? 1 : 0.45);
+        if (!live && !mine) ped.setTint(0x7a7a70);
+        else ped.clearTint();
+        if (live) {
+          const { key } = giftIcon(sh.gifts[i]);
+          const bob = Math.sin((t + i * 40) / 18) * 3;
+          const glow = this.obtain(`shglow${i}`, "bubble:special", 39);
+          glow.setPosition(Math.round(px), Math.round(sh.y - 40 + bob));
+          glow.setScale(1.7 + Math.sin(t / 9 + i) * 0.12);
+          glow.setAlpha(0.55);
+          glow.setTint(0xffd84a);
+          const icon = this.obtain(`shicon${i}`, `${key}#0`, 43);
+          icon.setOrigin(0.5, 0.5);
+          icon.setScale(2.5);
+          icon.setPosition(Math.round(px), Math.round(sh.y - 40 + bob));
+        }
+      }
     }
 
     // projectiles
@@ -409,6 +446,18 @@ export class PlayScene extends Phaser.Scene {
 
     // zones + rings + wind hints
     this.zoneGfx.clear();
+    if (sim.shrine && sim.shrine.taken < 0) {
+      // light beams: a soft column from each pedestal to the sky
+      const sh = sim.shrine;
+      for (let i = 0; i < sh.gifts.length; i++) {
+        const px = pedestalX(sh, i);
+        const pulse = 0.16 + Math.sin(t / 14 + i * 1.7) * 0.05;
+        this.zoneGfx.fillGradientStyle(0xffe080, 0xffe080, 0xffe080, 0xffe080, 0.0, 0.0, pulse, pulse);
+        this.zoneGfx.fillRect(px - 14, 0, 28, sh.y - 24);
+        this.zoneGfx.fillGradientStyle(0xfff6c0, 0xfff6c0, 0xfff6c0, 0xfff6c0, 0.0, 0.0, pulse * 1.6, pulse * 1.6);
+        this.zoneGfx.fillRect(px - 5, 0, 10, sh.y - 24);
+      }
+    }
     for (const z of sim.zones) {
       if (z.kind === "fire") {
         const flicker = 0.75 + Math.sin(t / 3 + z.id) * 0.25;

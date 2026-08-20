@@ -29,6 +29,7 @@ export function parseLevel(def: LevelDef): ParsedLevel {
   const enemySpawns: ParsedLevel["enemySpawns"] = [];
   const jarPoints: ParsedLevel["jarPoints"] = [];
   let secretDoor: ParsedLevel["secretDoor"] = null;
+  let shrine: ParsedLevel["shrine"] = null;
 
   for (let y = 0; y < GRID_H; y++) {
     const row = def.grid[y].padEnd(GRID_W, ".");
@@ -67,6 +68,9 @@ export function parseLevel(def: LevelDef): ParsedLevel {
         case "S":
           secretDoor = tileCenter(x, y);
           break;
+        case "W":
+          shrine = tileCenter(x, y);
+          break;
         case "a":
         case "b":
         case "c":
@@ -83,7 +87,7 @@ export function parseLevel(def: LevelDef): ParsedLevel {
     collision.push(cRow);
     wind.push(wRow);
   }
-  return { collision, wind, spawns: { p1, p2 }, enemySpawns, jarPoints, secretDoor };
+  return { collision, wind, spawns: { p1, p2 }, enemySpawns, jarPoints, secretDoor, shrine };
 }
 
 /** Merge a world's default enemy letters with a level's overrides. */

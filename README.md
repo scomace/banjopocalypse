@@ -34,6 +34,8 @@ load (`src/aachar/baker.ts`).
 - `/#/admin/baker` bake QA: live rig vs baked sheets
 - `?quickstart=1&cast=earl&level=12&seed=5` jump straight into a run
 - `npx tsx scripts/sim-smoke.mts` headless sim torture test
+- `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)
+- in a quickstart run: `0` clears the level, `9` forces a frenzy, `8` claims the shrine
 
 ## Ship
 

@@ -1,6 +1,6 @@
 // The eight playable kinfolk. `aachar` names the base character inside
 // public/aachar/manifest.json (Scott's originals, confirmed 2026-08-14);
-// everything else is game data. Signature weapons start at level 2 and are
+// everything else is game data. Signature weapons start at level 1 and are
 // always in the arsenal. Stats are 1..5 pips.
 
 export type CastMember = {

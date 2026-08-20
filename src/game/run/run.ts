@@ -1,18 +1,31 @@
 // The run layer: campaign state across levels. Lives, score, arsenal,
 // upgrade cards, YEEHAW progress, continues, world checkpoints. The sim is
 // per-level; this survives between sims and talks to the save system.
+//
+// Weapon flow: you start with your signature weapon at Lv1 and nothing else.
+// New weapons come ONLY from the shrine on level 5 of each world (pick one of
+// two pedestals, see sim/shrine.ts); intermission cards level up what you
+// have, hand out tonics, or small bonuses. Once the arsenal is full the
+// shrines switch to relics.
 
 import { deriveSeed, mulberry32, shuffled, type Rng } from "../core/rng";
 import { EXTRA_LIFE_EVERY, YEEHAW, YEEHAW_BONUS } from "../sim/constants";
-import type { Loadout } from "../sim/types";
+import type { Loadout, ShrineGift } from "../sim/types";
 import { WEAPONS, weaponById } from "../sim/weapons";
+import { RELICS } from "../sim/shrine";
 import { castById } from "../cast";
+import { isBossLevel, levelInWorld } from "../levels/worlds";
 
 export const MAX_WEAPONS = 6;
 export const MAX_TONICS = 4;
 export const MAX_WEAPON_LEVEL = 5;
 export const START_LIVES = 3;
 export const CONTINUES = 3;
+/** Signature weapon starts here; four Lv-ups fill levels 1-4 before shrine #1. */
+export const SIGNATURE_START_LEVEL = 1;
+/** Shrines sit on this level of every world (1..11). */
+export const SHRINE_LEVEL_IN_WORLD = 5;
+export const PENNIES_BONUS = 10000;
 
 export type TonicDef = { id: string; name: string; desc: string };
 
@@ -35,13 +48,18 @@ export type PlayerRun = {
   loadout: Loadout;
   letters: boolean[]; // Y E E H A W collected
   rerollsLeft: number;
+  /** Jar o' Lightnin' card: next level opens in a frenzy */
+  headStart: boolean;
 };
 
 export type Card =
-  | { kind: "newWeapon"; weaponId: string }
   | { kind: "upgrade"; weaponId: string; toLevel: number }
   | { kind: "evolve"; weaponId: string }
-  | { kind: "tonic"; tonicId: string };
+  | { kind: "tonic"; tonicId: string }
+  // bonus fillers: keep every hand at three real choices
+  | { kind: "life" }
+  | { kind: "headstart" }
+  | { kind: "pennies" };
 
 export type RunState = {
   seed: number;
@@ -62,12 +80,13 @@ export function newPlayerRun(castId: string): PlayerRun {
     score: 0,
     nextLifeAt: EXTRA_LIFE_EVERY,
     loadout: {
-      weapons: [{ id: cast.signatureWeapon, level: 2 }],
+      weapons: [{ id: cast.signatureWeapon, level: SIGNATURE_START_LEVEL }],
       tonics: [],
       evolved: [],
     },
     letters: [false, false, false, false, false, false],
     rerollsLeft: 1,
+    headStart: false,
   };
 }
 
@@ -115,13 +134,19 @@ export function collectLetter(pr: PlayerRun, letter: number): { completed: boole
   return { completed: false };
 }
 
-/** Deal 3 cards for a player at the intermission. */
+/**
+ * Deal 3 cards for a player at the intermission.
+ *
+ * Shape: one weapon card (Lv-up or evolve) whenever one exists, at most one
+ * tonic, then more weapon cards for other weapons, then bonus fillers. With a
+ * single weapon (levels 1-4) that reads `Lv-up / tonic / bonus`; with two or
+ * more it is mostly `Lv-up / Lv-up / tonic`. Tonics stop being filler, so the
+ * cap doesn't get hit by level 5, and the hand never collapses below three.
+ */
 export function dealCards(run: RunState, pr: PlayerRun): Card[] {
   const rng = run.cardRng;
-  const cards: Card[] = [];
-  const options: Card[] = [];
 
-  // evolutions first: weapon at max level + paired tonic owned + not evolved
+  const weaponCards: Card[] = [];
   for (const w of pr.loadout.weapons) {
     const def = weaponById(w.id);
     if (
@@ -129,53 +154,74 @@ export function dealCards(run: RunState, pr: PlayerRun): Card[] {
       !pr.loadout.evolved.includes(w.id) &&
       pr.loadout.tonics.includes(def.evolveTonic)
     ) {
-      options.push({ kind: "evolve", weaponId: w.id });
+      weaponCards.push({ kind: "evolve", weaponId: w.id });
+    } else if (w.level < MAX_WEAPON_LEVEL) {
+      weaponCards.push({ kind: "upgrade", weaponId: w.id, toLevel: w.level + 1 });
     }
   }
-  // upgrades
-  for (const w of pr.loadout.weapons) {
-    if (w.level < MAX_WEAPON_LEVEL) {
-      options.push({ kind: "upgrade", weaponId: w.id, toLevel: w.level + 1 });
-      // upgrades are the bread and butter: weight them double
-      options.push({ kind: "upgrade", weaponId: w.id, toLevel: w.level + 1 });
-    }
-  }
-  // new weapons
-  if (pr.loadout.weapons.length < MAX_WEAPONS) {
-    for (const def of WEAPONS) {
-      if (!pr.loadout.weapons.some((w) => w.id === def.id)) {
-        options.push({ kind: "newWeapon", weaponId: def.id });
-      }
-    }
-  }
-  // tonics
-  if (pr.loadout.tonics.length < MAX_TONICS) {
-    for (const t of TONICS) {
-      if (!pr.loadout.tonics.includes(t.id)) {
-        options.push({ kind: "tonic", tonicId: t.id });
-      }
-    }
-  }
+  const tonicCards: Card[] =
+    pr.loadout.tonics.length < MAX_TONICS
+      ? TONICS.filter((t) => !pr.loadout.tonics.includes(t.id)).map(
+          (t): Card => ({ kind: "tonic", tonicId: t.id }),
+        )
+      : [];
+  const fillers: Card[] = [{ kind: "life" }, { kind: "headstart" }, { kind: "pennies" }];
 
-  const pool = shuffled(rng, options);
-  const seen = new Set<string>();
-  for (const c of pool) {
-    const key =
-      c.kind === "tonic" ? `t:${c.tonicId}` : `${c.kind}:${(c as { weaponId: string }).weaponId}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    cards.push(c);
-    if (cards.length === 3) break;
+  const wPool = shuffled(rng, weaponCards);
+  const tPool = shuffled(rng, tonicCards);
+  const fPool = shuffled(rng, fillers);
+  const hand: Card[] = [];
+  if (wPool.length) hand.push(wPool.shift()!);
+  // a tonic every hand while the arsenal is thin; 65% once Lv-ups compete
+  if (tPool.length && (wPool.length === 0 || rng() < 0.65)) hand.push(tPool.shift()!);
+  while (hand.length < 3 && wPool.length) hand.push(wPool.shift()!);
+  if (hand.length < 3 && tPool.length && !hand.some((c) => c.kind === "tonic")) {
+    hand.push(tPool.shift()!);
   }
-  return cards;
+  while (hand.length < 3 && fPool.length) hand.push(fPool.shift()!);
+  return shuffled(rng, hand);
+}
+
+// ---------------------------------------------------------------- shrines
+
+export function isShrineLevel(levelIndex: number): boolean {
+  return !isBossLevel(levelIndex) && levelInWorld(levelIndex) === SHRINE_LEVEL_IN_WORLD;
+}
+
+/**
+ * What the shrine on this level offers: two weapons nobody in the party owns
+ * (the pick is shared — whoever touches, everyone gets it), or relics once
+ * anyone's arsenal is full / the bestiary of weapons is exhausted. Seeded
+ * from (run seed, level) so rerolling the intermission can't fish for it.
+ */
+export function shrineGiftsFor(run: RunState): ShrineGift[] {
+  if (!isShrineLevel(run.levelIndex)) return [];
+  const rng = mulberry32(deriveSeed(run.seed, 5000 + run.levelIndex));
+  const live = run.players.filter((p): p is PlayerRun => !!p && p.lives > 0);
+  const owned = new Set<string>();
+  for (const p of live) for (const w of p.loadout.weapons) owned.add(w.id);
+  const anyFull = live.some((p) => p.loadout.weapons.length >= MAX_WEAPONS);
+  const candidates = anyFull ? [] : WEAPONS.filter((w) => !owned.has(w.id)).map((w) => w.id);
+  const gifts: ShrineGift[] = shuffled(rng, candidates)
+    .slice(0, 2)
+    .map((id): ShrineGift => ({ kind: "weapon", weaponId: id }));
+  const relics = shuffled(rng, RELICS.map((r) => r.id));
+  while (gifts.length < 2 && relics.length) {
+    gifts.push({ kind: "relic", relicId: relics.shift()! });
+  }
+  return gifts;
 }
 
 export function applyCard(pr: PlayerRun, card: Card): void {
   switch (card.kind) {
-    case "newWeapon":
-      if (pr.loadout.weapons.length < MAX_WEAPONS) {
-        pr.loadout.weapons.push({ id: card.weaponId, level: 1 });
-      }
+    case "life":
+      pr.lives++;
+      break;
+    case "headstart":
+      pr.headStart = true;
+      break;
+    case "pennies":
+      addScore(pr, PENNIES_BONUS);
       break;
     case "upgrade": {
       const w = pr.loadout.weapons.find((x) => x.id === card.weaponId);
@@ -198,8 +244,12 @@ export function applyCard(pr: PlayerRun, card: Card): void {
 
 export function cardTitle(card: Card): string {
   switch (card.kind) {
-    case "newWeapon":
-      return weaponById(card.weaponId).name;
+    case "life":
+      return "Spare Overalls";
+    case "headstart":
+      return "Jar o' Lightnin'";
+    case "pennies":
+      return "Coffee Can Savings";
     case "upgrade":
       return `${weaponById(card.weaponId).name} Lv${card.toLevel}`;
     case "evolve":
@@ -211,8 +261,12 @@ export function cardTitle(card: Card): string {
 
 export function cardDesc(card: Card): string {
   switch (card.kind) {
-    case "newWeapon":
-      return weaponById(card.weaponId).desc;
+    case "life":
+      return "+1 life. Patched at the knees.";
+    case "headstart":
+      return "Start the next level already frenzied.";
+    case "pennies":
+      return `+${PENNIES_BONUS.toLocaleString()} points, counted twice.`;
     case "upgrade":
       return "Meaner, faster, more of it.";
     case "evolve":
@@ -231,8 +285,9 @@ export function applyContinue(run: RunState): void {
     if (!pr) continue;
     const cast = castById(pr.castId);
     pr.lives = START_LIVES;
+    pr.headStart = false;
     pr.loadout = {
-      weapons: [{ id: cast.signatureWeapon, level: 2 }],
+      weapons: [{ id: cast.signatureWeapon, level: SIGNATURE_START_LEVEL }],
       tonics: [],
       evolved: [],
     };

@@ -28,6 +28,12 @@ export const P_GRAVITY = 0.4;
 export const P_MAX_FALL = 8.5;
 /** Releasing jump cuts the rise to this — a tap is a ~1 tile hop. */
 export const P_JUMP_CUT_VY = -5.2;
+/**
+ * Feet may rise one tile above the field, then you bonk the sky. Mirrors the
+ * FIELD_H + 8 slack the bottom wrap allows. Without it a hook dismount can
+ * throw a player hundreds of px above the screen, blind and uncontrollable.
+ */
+export const P_CEILING_Y = -TILE;
 export const COYOTE_TICKS = 4;
 export const JUMP_BUFFER_TICKS = 6;
 export const P_INVULN_TICKS = 120; // post-respawn mercy
@@ -41,6 +47,7 @@ export const HOOK_MIN_LEN = 30; // reel-in stops here
 export const HOOK_REEL = 2.3; // px/tick of line reeled while held
 export const HOOK_YANK = 3.2; // impulse toward the anchor on bite
 export const HOOK_SWING_MAX = 10.5; // speed cap while on the line
+export const HOOK_HOP_VY = -12.0; // hardest a line dismount can throw you
 export const HOOK_COOLDOWN = 8; // ticks before the next cast
 export const HOOK_POWER = 2; // chip damage on a hooked varmint
 export const HOOK_KICK_SPEED = 2.2; // moving at least this fast on the line, your boots fling enemies
@@ -74,8 +81,11 @@ export const HURRY_UP_TICKS = 45 * TICK_HZ;
 export const LEVEL_INTRO_TICKS = 90;
 export const LEVEL_CLEAR_TICKS = 180;
 export const FRENZY_TICKS = 20 * TICK_HZ;
+/** Weapon level cap (mirrored by the run layer's MAX_WEAPON_LEVEL). */
+export const WEAPON_LEVEL_CAP = 5;
 export const JAR_INTERVAL_TICKS = 40 * TICK_HZ;
-export const SPECIAL_INTERVAL_TICKS = 30 * TICK_HZ;
+export const SPECIAL_INTERVAL_TICKS = 12 * TICK_HZ;
+export const SPECIAL_FIRST_TICKS = 4 * TICK_HZ; // first special drifts in early
 export const GHOST_REVIVE_TICKS = 14 * TICK_HZ; // ghost bubble lifetime before re-drift
 
 // --- scoring ---

@@ -346,6 +346,14 @@ export class JugBandAudio {
         roll.forEach((n, i) => this.banjo(t + i * 0.06, n, 0.55, this.sfxBus));
         break;
       }
+      case "weaponAcquired": {
+        // shrine reveal: a gospel swell under a climbing banjo roll, then a shimmer
+        this.gospelChord(t, [55, 62, 67, 71, 74, 79], 2.2, 0.18);
+        const roll = [55, 62, 67, 71, 74, 79, 83, 86];
+        roll.forEach((n, i) => this.banjo(t + 0.08 + i * 0.07, n, 0.6, this.sfxBus));
+        this.tone(t + 0.6, 1.2, midiToFreq(91), "triangle", 0.12, { endFreq: midiToFreq(98) });
+        break;
+      }
       case "playerDie": {
         // sad solo banjo bend
         this.tone(t, 0.7, 330, "sawtooth", 0.2, { endFreq: 110 });
