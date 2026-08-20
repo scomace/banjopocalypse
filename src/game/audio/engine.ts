@@ -50,6 +50,12 @@ const SAMPLE_SFX: Record<string, { file: string; gain?: number; cut?: number }> 
   windFail: { file: "wind-fail.mp3", gain: 0.8 },
   /** last pips of wind: the wheeze under the jump */
   windStrain: { file: "wind-strain.mp3", gain: 0.5 },
+  /** Granny Mae's air special: the bean-powered scoot */
+  fart: { file: "fart.mp3", gain: 0.8 },
+  /** Granny Mae gassed out: the whiff when the beans run dry */
+  wetfart: { file: "wetfart.mp3", gain: 0.8 },
+  /** the hog stampede special popping */
+  hogSqueal: { file: "pigsqueal.mp3", gain: 0.8 },
 };
 
 export class JugBandAudio {
@@ -589,6 +595,11 @@ export class JugBandAudio {
         this.tone(t + 0.02, 0.18, 1100 * pitch, "sine", 0.035, { endFreq: 1500 * pitch, attack: 0.05 });
         break;
       }
+      case "wetfart":
+        // Granny Mae gassed out: public/sounds/wetfart.mp3, else the
+        // generic whiff below.
+        if (this.playSample("wetfart", t, pitch, pan)) break;
+      // falls through
       case "windFail": {
         // gassed out: the hiccup that ate the double jump. Sample if
         // public/sounds/wind-fail.mp3 exists, else the game's own hic (the
@@ -675,11 +686,18 @@ export class JugBandAudio {
         this.tone(t, 0.4, 2000, "sawtooth", 0.2, { endFreq: 120 });
         break;
       }
+      case "fart":
+        // Granny Mae's scoot: public/sounds/fart.mp3, else a low skunk rip
+        if (this.playSample("fart", t, pitch, pan)) break;
+        pitch *= 0.75;
+      // falls through
       case "skunk":
-        this.noise(t, 0.7, 300, 0.6, 0.2, "lowpass");
-        this.tone(t, 0.5, 90, "sine", 0.15, { endFreq: 60 });
+        this.noise(t, 0.7, 300 * pitch, 0.6, 0.2, "lowpass");
+        this.tone(t, 0.5, 90 * pitch, "sine", 0.15, { endFreq: 60 * pitch });
         break;
       case "hogSqueal": {
+        // hog stampede popping: public/sounds/pigsqueal.mp3, else synth
+        if (this.playSample("hogSqueal", t, pitch, pan)) break;
         this.tone(t, 0.35, 900, "sawtooth", 0.24, { endFreq: 1500, vibratoHz: 14, vibratoCents: 120 });
         this.tone(t + 0.4, 0.3, 700, "sawtooth", 0.2, { endFreq: 400 });
         break;

@@ -359,7 +359,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       // ...and it costs wind: one roll per airtime, a gassed-out whiff
       // stumbles instead (wind.ts)
       if (spendWind(sim, p)) fireAirSpecial(sim, p, airSpecial);
-      else stumble(sim, p);
+      else stumble(sim, p, airSpecial);
     }
   }
   // variable jump height (a Fishin' Line launch or head bounce is not a

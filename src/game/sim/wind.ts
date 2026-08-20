@@ -25,6 +25,7 @@ import {
   WIND_STUMBLE_MULT,
   WIND_STUMBLE_TICKS,
 } from "./constants";
+import type { CastMember } from "../cast";
 import type { PlayerState, Sim } from "./types";
 import { emit } from "./sim";
 
@@ -71,13 +72,21 @@ export function spendWind(sim: Sim, p: PlayerState): boolean {
   return fires;
 }
 
-/** The whiff: hiccup mid-press, a stumble hop, legs going every which way. */
-export function stumble(sim: Sim, p: PlayerState): void {
+/**
+ * The whiff: hiccup mid-press, a stumble hop, legs going every which way.
+ * Granny Mae's whiff is a different noise entirely (the beans ran out:
+ * wetfart), so the caller passes the cousin's air special.
+ */
+export function stumble(
+  sim: Sim,
+  p: PlayerState,
+  airSpecial?: CastMember["airSpecial"],
+): void {
   p.vy = Math.min(p.vy, p.jumpVy * P_AIR_JUMP_MULT * WIND_STUMBLE_MULT);
   p.stumbleTicks = WIND_STUMBLE_TICKS;
   emit(sim, {
     t: "sfx",
-    name: "windFail",
+    name: airSpecial === "fart" ? "wetfart" : "windFail",
     pitch: 0.92 + sim.rng() * 0.16,
     pan: (p.x / FIELD_W) * 2 - 1,
   });

@@ -13,7 +13,7 @@ import {
   TICK_HZ,
   TILE,
 } from "./constants";
-import { circleOverlapsBox, standingOnGround, tileAt } from "./physics";
+import { circleOverlapsBox, tileAt } from "./physics";
 import type { SpecialBubble, SpecialKind, Sim, Zone } from "./types";
 import { emit } from "./sim";
 import { killEnemyByWeapon } from "./enemies";
@@ -190,10 +190,11 @@ function stepHog(sim: Sim): void {
   if (!hog.active) return;
   hog.ticks++;
   hog.x += hog.vx;
-  // hog bulldozes along the floor line, snapping to ground
-  if (!standingOnGround(sim.level, hog.x, hog.y, 30)) {
-    hog.y = Math.min(hog.y + 4, FIELD_H);
-  }
+  // hog bulldozes along the floor line. Creek gaps are no match for a
+  // stampede: it barrels straight across at floor height rather than
+  // dropping in (dropping used to leave it stuck below the floor row, where
+  // there is no ground to snap back to, and it finished the charge buried).
+  hog.y = FIELD_H - TILE;
   for (const e of sim.enemies) {
     if (e.phase.kind === "dying") continue;
     if (circleOverlapsBox(hog.x, hog.y - 14, 22, e.x, e.y, 26, 26)) {

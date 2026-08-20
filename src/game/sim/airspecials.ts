@@ -22,6 +22,7 @@ import {
   FART_CLOUD_W,
   FART_LIFT_VY,
   FART_VX,
+  FIELD_W,
   FLUTTER_ANIM_TICKS,
   FLUTTER_VX_CAP,
   FLUTTER_VX_MULT,
@@ -82,7 +83,7 @@ export function fireAirSpecial(
         ticks: FART_CLOUD_TICKS,
         spreading: false,
       });
-      emit(sim, { t: "sfx", name: "skunk", pitch: 0.75 });
+      emit(sim, { t: "sfx", name: "fart", pan: (p.x / FIELD_W) * 2 - 1 });
       emit(sim, { t: "burst", text: "TOOT!", x: p.x - p.facing * 20, y: p.y - 8, palette: "Toxic" });
       break;
     }
