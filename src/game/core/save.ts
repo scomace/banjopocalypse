@@ -32,8 +32,10 @@ export function setStorageAdapter(a: StorageAdapter): void {
 export type SaveData = {
   /** highest world index (1..9) unlocked as a starting checkpoint */
   worldsUnlocked: number;
-  /** worlds fully cleared (drives character unlocks) */
+  /** worlds fully cleared (fallback character unlock + stats) */
   worldsCleared: number;
+  /** cousins busted out of their rescue cages (cast ids); unlocks for good */
+  castRescued: string[];
   wonOnce: boolean;
   wonDeathless: boolean;
 };
@@ -59,6 +61,9 @@ export function loadSave(): SaveData {
       return {
         worldsUnlocked: Math.max(1, Math.min(9, d.worldsUnlocked ?? 1)),
         worldsCleared: Math.max(0, Math.min(9, d.worldsCleared ?? 0)),
+        castRescued: Array.isArray(d.castRescued)
+          ? d.castRescued.filter((id): id is string => typeof id === "string")
+          : [],
         wonOnce: !!d.wonOnce,
         wonDeathless: !!d.wonDeathless,
       };
@@ -66,7 +71,7 @@ export function loadSave(): SaveData {
   } catch {
     /* fresh save below */
   }
-  return { worldsUnlocked: 1, worldsCleared: 0, wonOnce: false, wonDeathless: false };
+  return { worldsUnlocked: 1, worldsCleared: 0, castRescued: [], wonOnce: false, wonDeathless: false };
 }
 
 export function writeSave(data: SaveData): void {
@@ -80,6 +85,14 @@ export function saveCheckpoint(run: RunState): void {
   const nextWorld = Math.min(9, clearedWorld + 1);
   save.worldsUnlocked = Math.max(save.worldsUnlocked, nextWorld);
   save.worldsCleared = Math.max(save.worldsCleared, clearedWorld);
+  writeSave(save);
+}
+
+/** A rescue cage popped: that cousin is on the roster for good. */
+export function markRescued(castId: string): void {
+  const save = loadSave();
+  if (save.castRescued.includes(castId)) return;
+  save.castRescued = [...save.castRescued, castId];
   writeSave(save);
 }
 

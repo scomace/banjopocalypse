@@ -9,6 +9,8 @@
 //      claiming grants the gift + a frenzy and releases the level-clear hold
 //   8. run layer: signature Lv1, hands are always 3 cards w/o newWeapon,
 //      shrine offers never repeat an owned weapon and go relic when full
+//  16. wind: air specials spend stamina, gassed presses coin-flip into a
+//      stumble, the meter regens grounded, bosses are exempt, all deterministic
 // Run: npx tsx scripts/sim-smoke.mts
 
 import { getLevelDef, levelCountCheck } from "../src/game/levels";
@@ -18,9 +20,10 @@ import { parseLevel } from "../src/game/levels/parse";
 import { createSim, step, startFrenzy, hurtPlayer } from "../src/game/sim/sim";
 import type { Sim } from "../src/game/sim/types";
 import { WEAPONS } from "../src/game/sim/weapons";
-import { CAST } from "../src/game/cast";
+import { CAST, rescueForLevel } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
+import { hitCage } from "../src/game/sim/cage";
 import {
   P_HEIGHT,
   PVP_BOUNCE,
@@ -30,6 +33,11 @@ import {
   HURRY_UP_TICKS,
   SECOND_POUR_MAX,
   SECOND_POUR_MULT,
+  WIND_FAIL_CHANCE,
+  WIND_MAX,
+  WIND_REGEN_TICKS,
+  CAGE_HITS,
+  CAGE_HIT_COOLDOWN,
 } from "../src/game/sim/constants";
 import { killEnemyByWeapon } from "../src/game/sim/enemies";
 import { ReplayRecorder, verifyReplay } from "../src/game/replay";
@@ -761,6 +769,135 @@ for (const c of CAST) {
     fail("no-repeat: single-weapon arsenal failed to frenzy");
   }
   console.log("    no-repeat rolls ok (2-weapon alternation, solo fallback)");
+}
+
+// ---- 16. wind: air-special stamina ----
+console.log("[16] wind: air-special stamina + stumble");
+{
+  const JUMP = 4; // CMD_JUMP
+  // Earl mashes the air special for 30s: five free pips, then every press is
+  // a once-per-airtime coin flip; whiffs stumble and emit windFail.
+  const mash = (level: number, seed: number, ticks = 60 * 30) => {
+    const sim = createSim({
+      seed,
+      levelDef: getLevelDef(level),
+      world: worldForLevel(level),
+      levelIndex: level,
+      isBoss: isBossLevel(level),
+      players: [
+        { castId: "earl", loadout: { weapons: [{ id: "twang", level: 1 }], tonics: [], evolved: [] }, livesLeft: 3 },
+        null,
+      ],
+      deathless: false,
+    });
+    for (let t = 0; t < 95; t++) step(sim, [0, 0], [0, 0]);
+    const p = sim.players[0];
+    p.invuln = 1_000_000; // varmints don't get a vote in this test
+    let fires = 0;
+    let whiffs = 0;
+    let minWind = WIND_MAX;
+    let prev = 0;
+    for (let t = 0; t < ticks; t++) {
+      const cmd = t % 9 === 0 ? JUMP : 0; // a fresh press every 9 ticks
+      step(sim, [cmd, 0], [prev, 0]);
+      prev = cmd;
+      for (const e of sim.fx) {
+        if (e.t !== "sfx") continue;
+        if (e.name === "windFail") whiffs++;
+        else if (e.name === "jump" && e.pitch === 1.18) fires++; // Earl's honest double
+      }
+      minWind = Math.min(minWind, p.wind);
+    }
+    return { sim, p, fires, whiffs, minWind, hash: hashSim(sim) };
+  };
+  const a = mash(1, 99);
+  if (a.minWind !== 0) fail(`wind: meter never emptied (min ${a.minWind})`);
+  if (a.whiffs === 0) fail("wind: no stumbles in 30s of gassed mashing");
+  if (a.fires <= WIND_MAX) fail(`wind: gassed presses never fired (fires ${a.fires})`);
+  // roughly a coin flip once gassed: fires past the free pips vs whiffs
+  const gassedFires = a.fires - WIND_MAX;
+  const rate = a.whiffs / (a.whiffs + gassedFires);
+  if (Math.abs(rate - WIND_FAIL_CHANCE) > 0.25) fail(`wind: whiff rate ${rate.toFixed(2)} far from ${WIND_FAIL_CHANCE}`);
+  finite(a.sim, "wind mash");
+  // deterministic: same seed, same story
+  const b = mash(1, 99);
+  if (b.hash !== a.hash || b.whiffs !== a.whiffs || b.fires !== a.fires) fail("wind: not deterministic across runs");
+  // regen: stand still and the pips come back, one per WIND_REGEN_TICKS
+  {
+    const { sim, p } = mash(1, 99, 60 * 10);
+    // land, then wait out a full refill
+    let t = 0;
+    while (t < 600 && !p.grounded) { step(sim, [0, 0], [0, 0]); t++; }
+    const before = p.wind;
+    for (let i = 0; i < WIND_REGEN_TICKS * WIND_MAX + 5; i++) step(sim, [0, 0], [0, 0]);
+    if (!p.grounded) console.log("    (regen check: Earl never settled; skipped)");
+    else if (p.wind !== WIND_MAX) fail(`wind: regen stalled at ${p.wind} (was ${before})`);
+  }
+  // boss floors are exempt: the meter never moves, nothing ever whiffs
+  const boss = mash(11, 5, 60 * 10);
+  if (boss.minWind !== WIND_MAX || boss.whiffs !== 0) fail(`wind: boss level charged wind (min ${boss.minWind}, whiffs ${boss.whiffs})`);
+  console.log(`    wind ok (fires ${a.fires}, whiffs ${a.whiffs}, gassed whiff rate ${rate.toFixed(2)})`);
+}
+
+// ---- 17. rescue cages ----
+console.log("[17] rescue cages");
+{
+  const caged = CAST.filter((m) => m.rescue);
+  if (caged.length !== 6) fail(`expected 6 caged cousins, got ${caged.length}`);
+  let popped = 0;
+  for (const m of caged) {
+    const r = m.rescue!;
+    const lvl = (r.world - 1) * 11 + r.level;
+    if (isBossLevel(lvl) || r.level === 5) fail(`${m.id}: cage on a boss/shrine level (${lvl})`);
+    if (rescueForLevel(lvl)?.id !== m.id) fail(`${m.id}: rescueForLevel(${lvl}) disagrees`);
+    const parsed = parseLevel(getLevelDef(lvl));
+    if (!parsed.rescue) {
+      fail(`${m.id}: level ${lvl} has no R tile`);
+      continue;
+    }
+    const sim = mkSim(lvl);
+    if (!sim.cage || sim.cage.castId !== m.id) {
+      fail(`${m.id}: createSim built no cage on level ${lvl}`);
+      continue;
+    }
+    for (let t = 0; t < 300 && sim.status === "intro"; t++) step(sim, [0, 0], [0, 0]);
+    // park Earl on the bars: touches count once per cooldown, three pops it
+    const p = sim.players[0];
+    p.x = sim.cage.x;
+    p.y = sim.cage.y;
+    let rescueEvents = 0;
+    let ticks = 0;
+    while (sim.cage.openedTick < 0 && ticks < 600) {
+      p.x = sim.cage.x;
+      p.y = sim.cage.y;
+      p.vx = 0;
+      p.vy = 0;
+      step(sim, [0, 0], [0, 0]);
+      rescueEvents += sim.fx.filter((e) => e.t === "rescue").length;
+      ticks++;
+    }
+    if (sim.cage.openedTick < 0) fail(`${m.id}: cage never popped (${sim.cage.hits} hits)`);
+    else if (sim.cage.hits !== CAGE_HITS) fail(`${m.id}: popped at ${sim.cage.hits} hits`);
+    if (ticks < CAGE_HIT_COOLDOWN * (CAGE_HITS - 1)) fail(`${m.id}: hits landed faster than the cooldown (${ticks} ticks)`);
+    if (rescueEvents !== 1) fail(`${m.id}: ${rescueEvents} rescue events, want 1`);
+    if (!sim.scored.some((sc) => sc.amount === 5000)) fail(`${m.id}: no rescue score`);
+    // a popped cage takes no more hits
+    hitCage(sim, 0);
+    if (sim.cage.hits !== CAGE_HITS) fail(`${m.id}: popped cage took a hit`);
+    // and the cage is not an enemy: it must never hold the level open
+    for (const e of sim.enemies) {
+      e.phase = { kind: "dying", ticks: 0, targetX: e.x, targetY: e.y, chain: 1, toBoss: false };
+    }
+    for (let t = 0; t < 400 && sim.status === "play"; t++) step(sim, [0, 0], [0, 0]);
+    if (sim.status !== "cleared") fail(`${m.id}: level ${lvl} stuck in ${sim.status} with the cage popped`);
+    finite(sim, `cage ${m.id}`);
+    popped++;
+  }
+  // non-rescue levels build no cage
+  for (const lvl of [1, 5, 11, 12, 61, 99]) {
+    if (mkSim(lvl).cage) fail(`level ${lvl} grew a cage`);
+  }
+  console.log(`    cages ok (${popped}/${caged.length} popped, 3 hits each, levels clear around them)`);
 }
 
 if (failures === 0) {

@@ -45,6 +45,12 @@ export type PlayerState = {
   jumpBuffer: number;
   /** The one-shot air special is spent; wiped every time boots touch ground. */
   airJumpUsed: boolean;
+  /** Air-special stamina pips left (WIND_* in constants; wind.ts). */
+  wind: number;
+  /** Grounded ticks banked toward the next wind pip. */
+  windTicks: number;
+  /** Gassed-out whiff wobble countdown (cosmetic, but sim-owned). */
+  stumbleTicks: number;
   /** Merle's flutter-kick anim countdown (cosmetic, but sim-owned). */
   flutterTicks: number;
   /** Darlene's possum chute is open this tick (slow fall; renderer draws it). */
@@ -176,8 +182,21 @@ export type Pet = {
   facing: Facing;
   grounded: boolean;
   ticks: number;
+  /** possum: 1 = playing dead. kin: 2 = bonked (stunned against a wall) */
   mode: number;
   power: number;
+  /** kin (cousin/granny): run speed, set at spawn from the weapon level */
+  speed?: number;
+  /** kin: ticks left on the commitment lock; facing can't change while >0 */
+  lock?: number;
+  /** kin: ticks left before another hop is allowed */
+  hopCd?: number;
+  /** kin: ticks left before another lunge is allowed */
+  lungeCd?: number;
+  /** kin: ticks left on the current headbutt lunge (double speed) */
+  lunge?: number;
+  /** kin: ticks left stunned after bonking a wall */
+  bonk?: number;
 };
 
 export type ItemKind =
@@ -272,10 +291,14 @@ export type BossState = {
 export type FxEvent =
   | { t: "sfx"; name: string; pitch?: number; pan?: number }
   | { t: "burst"; text: string; x: number; y: number; big?: boolean; palette?: string }
-  | { t: "balloon"; player: number; trigger: string }
+  /** `text`+`at` = a non-player speaker (the caged cousin, player slot 9) with a
+   *  fixed world anchor; otherwise the named player barks `trigger` */
+  | { t: "balloon"; player: number; trigger: string; text?: string; at?: { x: number; y: number } }
   | { t: "shake"; power: number }
   | { t: "belch"; player: number }
-  | { t: "flash"; color: number };
+  | { t: "flash"; color: number }
+  /** a rescue cage popped; the host marks the cousin rescued in the save */
+  | { t: "rescue"; cast: string; player: number };
 
 export type SimStatus = "intro" | "play" | "cleared" | "allDead" | "bossDead";
 
@@ -359,6 +382,31 @@ export type Sim = {
   shrine: ShrineState | null;
   /** set when a pedestal is claimed; the host shows the reveal and clears it */
   shrineTaken: { player: 0 | 1; gift: ShrineGift } | null;
+  /** rescue cage (one per rescue level, see cast.ts), null elsewhere */
+  cage: CageState | null;
+};
+
+/** A caged cousin. Always present on their level, even once rescued: the
+ *  sim stays save-independent so lockstep peers with different saves agree.
+ *  The host decides whether the pop is a first rescue or a repeat. */
+export type CageState = {
+  castId: string;
+  /** feet anchor of the cage */
+  x: number;
+  y: number;
+  /** padlock hits landed / needed */
+  hits: number;
+  hitsNeeded: number;
+  /** ticks until the lock takes another hit (so one touch is one hit) */
+  hitCooldown: number;
+  /** renderer: rattle countdown after a hit */
+  rattle: number;
+  /** tick the lock popped, -1 while shut */
+  openedTick: number;
+  /** caged hollers so far (indexes the cousin's cagedLines) */
+  hollers: number;
+  /** next tick the caged cousin calls out */
+  nextHollerTick: number;
 };
 
 /** InputCommand per player, indexed by PlayerState.index. Length 2 today;

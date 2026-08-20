@@ -12,6 +12,8 @@
 //   J  preferred mason-jar spawn point
 //   S  secret warp-cellar door location (only appears on deathless runs)
 //   W  weapon shrine (level 5 of every world): two pedestals + leashed guardians
+//   R  rescue cage: the cousin assigned to this level (cast.ts `rescue`) sits
+//      here behind a padlock; whack it open to add them to the roster
 //
 // Wind: bubbles in a plain column drift gently up and toward the top center;
 // wind tiles overwrite that with their own vector for their whole column/row
@@ -83,6 +85,8 @@ export type ParsedLevel = {
   secretDoor: { x: number; y: number } | null;
   /** weapon shrine anchor (feet of the pedestal row), if authored */
   shrine: { x: number; y: number } | null;
+  /** rescue cage anchor (feet), if authored */
+  rescue: { x: number; y: number } | null;
 };
 
 export const T_EMPTY = 0;

@@ -4,6 +4,8 @@
 
 import { rangeInt } from "../core/rng";
 import {
+  CAGE_H,
+  CAGE_W,
   FIELD_H,
   FIELD_W,
   P_HEIGHT,
@@ -12,9 +14,11 @@ import {
   TILE,
 } from "./constants";
 import { circleOverlapsBox, groundAhead, moveBody, standingOnGround, tileAt } from "./physics";
+import { T_PLATFORM, T_SOLID, type ParsedLevel } from "../levels/types";
 import type { Enemy, Pet, PlayerState, Projectile, Sim } from "./types";
 import { emit } from "./sim";
 import { killEnemyByWeapon } from "./enemies";
+import { hitCage } from "./cage";
 
 export type WeaponDef = {
   id: string;
@@ -327,19 +331,27 @@ function fireWeapon(sim: Sim, p: PlayerState): void {
       ).length;
       if (have < want && ready("cousin", 40)) {
         const isGranny = evolved && have === 2;
+        // second cousin runs the other way so the family fans out
+        const facing = (have % 2 === 0 ? p.facing : -p.facing) as 1 | -1;
         sim.pets.push({
           id: sim.nextId++,
           kind: isGranny ? "granny" : "cousin",
           owner: p.index,
           x: px - p.facing * 24,
           y: p.y,
-          vx: p.facing * 2,
+          vx: facing * 2,
           vy: 0,
-          facing: p.facing,
+          facing,
           grounded: false,
           ticks: 0,
           mode: 0,
           power: power + (isGranny ? 2 : 0),
+          speed: isGranny ? KIN_GRANNY_SPEED : KIN_SPEED_BASE + lvl * KIN_SPEED_PER_LVL,
+          lock: KIN_LOCK_TICKS,
+          hopCd: 0,
+          lungeCd: 0,
+          lunge: 0,
+          bonk: 0,
         });
         emit(sim, { t: "sfx", name: "cousinYell" });
       }
@@ -388,6 +400,14 @@ function hitEnemies(sim: Sim, pr: Projectile, radius: number): number {
     if (e.phase.kind === "dying") continue;
     if (circleOverlapsBox(pr.x, pr.y, radius, e.x, e.y, 26, 26)) {
       killEnemyByWeapon(sim, e, pr.owner, pr.power);
+      hits++;
+    }
+  }
+  // ...and the rescue cage's padlock
+  if (sim.cage && sim.cage.openedTick < 0 && sim.cage.hitCooldown <= 0) {
+    const c = sim.cage;
+    if (circleOverlapsBox(pr.x, pr.y, radius, c.x, c.y, CAGE_W, CAGE_H)) {
+      hitCage(sim, pr.owner);
       hits++;
     }
   }
@@ -626,6 +646,152 @@ function simHurt(): { hurtPlayer: typeof simModule.hurtPlayer } {
 
 // ---------------------------------------------------------------- pets
 
+// ---- Cousin Eddie / Granny: the dumb linebacker ----
+// Kin commit to a direction and GO. They run through varmints, bonk off walls
+// (stunned, then turn), run straight off ledges (vertical wrap brings them back
+// around), and only hop when the target is above and within reach. No pathing:
+// the comedy is in the commitment, and the commitment is what keeps them from
+// vibrating in place when a target sits above/below or behind a wall.
+const KIN_SPEED_BASE = 2.1;
+const KIN_SPEED_PER_LVL = 0.15;
+const KIN_GRANNY_SPEED = 1.4;
+const KIN_LOCK_TICKS = 20; // min ticks between facing changes
+const KIN_DEAD_ZONE = 16; // |dx| below this never changes facing
+const KIN_BEHIND = 24; // target must be this far behind to earn a turn
+const KIN_SAME_FLOOR = TILE * 1.5; // |dy| within this = "on my floor"
+const KIN_HOP_VY = -9; // ~4.2 tiles under pet gravity (a hair over a player jump)
+const KIN_HOP_MIN_DY = TILE * 0.5; // target must be at least this far above to hop
+const KIN_HOP_MAX_DY = TILE * 4; // ...and no further than this
+const KIN_SHELF_MIN_ROWS = 1; // climbable shelf: top edge this many rows above the feet...
+const KIN_SHELF_MAX_ROWS = 4; // ...up to this many (must be inside hop height)
+const KIN_HOP_CD = 24; // between in-place hops; ledge jumps are exempt (can't pogo off a ledge)
+const KIN_LUNGE_RANGE = TILE * 4;
+const KIN_LUNGE_TICKS = 10;
+const KIN_LUNGE_CD = 50;
+const KIN_LUNGE_MULT = 2;
+const KIN_BONK_TICKS = 15;
+const KIN_BONK_TICKS_GRANNY = 24;
+const KIN_LEASH = TILE * 3; // no varmints: jog back if further than this from owner
+
+/** Nearest enemy, preferring ones on roughly the kin's own floor. */
+function kinTarget(sim: Sim, pet: Pet): Enemy | null {
+  let best: Enemy | null = null;
+  let bestD = Infinity;
+  let bestFloor = false;
+  for (const e of sim.enemies) {
+    if (e.phase.kind !== "normal") continue;
+    const onFloor = Math.abs(e.y - pet.y) <= KIN_SAME_FLOOR;
+    if (bestFloor && !onFloor) continue;
+    const d = (e.x - pet.x) * (e.x - pet.x) + (e.y - pet.y) * (e.y - pet.y);
+    if ((onFloor && !bestFloor) || d < bestD) {
+      best = e;
+      bestD = d;
+      bestFloor = onFloor;
+    }
+  }
+  return best;
+}
+
+/** Is there a shelf (platform/solid top with air above it) a hop ahead and up? */
+function shelfAhead(level: ParsedLevel, x: number, y: number, facing: number): boolean {
+  const px = x + facing * 20;
+  for (let k = KIN_SHELF_MIN_ROWS; k <= KIN_SHELF_MAX_ROWS; k++) {
+    const top = y - k * TILE;
+    const t = tileAt(level, px, top + 1);
+    if (t === T_SOLID || t === T_PLATFORM) return tileAt(level, px, top - 1) === 0;
+  }
+  return false;
+}
+
+function stepKin(sim: Sim, pet: Pet, owner: PlayerState | undefined): void {
+  const granny = pet.kind === "granny";
+  const speed = pet.speed ?? (granny ? KIN_GRANNY_SPEED : KIN_SPEED_BASE);
+  if ((pet.lock ?? 0) > 0) pet.lock = (pet.lock ?? 0) - 1;
+  if ((pet.hopCd ?? 0) > 0) pet.hopCd = (pet.hopCd ?? 0) - 1;
+  if ((pet.lungeCd ?? 0) > 0) pet.lungeCd = (pet.lungeCd ?? 0) - 1;
+  if ((pet.lunge ?? 0) > 0) pet.lunge = (pet.lunge ?? 0) - 1;
+
+  // BONK: stand there seeing stars, then turn around once and recommit
+  if ((pet.bonk ?? 0) > 0) {
+    pet.bonk = (pet.bonk ?? 0) - 1;
+    pet.vx = 0;
+    if (pet.bonk === 0) {
+      pet.mode = 0;
+      pet.facing = -pet.facing as 1 | -1;
+      pet.lock = KIN_LOCK_TICKS;
+    }
+    return;
+  }
+
+  const target = kinTarget(sim, pet);
+  const hop = (): void => {
+    pet.vy = KIN_HOP_VY;
+    pet.grounded = false;
+    pet.hopCd = KIN_HOP_CD;
+  };
+  const canHop = !granny && pet.grounded && (pet.hopCd ?? 0) <= 0;
+
+  if (target) {
+    const dx = target.x - pet.x;
+    const dy = target.y - pet.y; // negative = target above
+    const sameFloor = Math.abs(dy) <= KIN_SAME_FLOOR;
+    const overhead = dy < -KIN_SAME_FLOOR; // on a higher floor
+    const inHopRange = dy <= -KIN_HOP_MIN_DY && dy >= -KIN_HOP_MAX_DY;
+    // Only a target on my floor or a hop above earns a turn, and only with
+    // boots on the ground (a mid-hop turn throws away the jump). Anything
+    // else: keep charging - walls, ledges and the wrap are how kin change floors.
+    const reachable = sameFloor || inHopRange;
+    if (Math.abs(dx) < KIN_DEAD_ZONE) {
+      // right under it: never flip, hop if it's close enough overhead
+      if (inHopRange && canHop) hop();
+    } else if ((pet.lock ?? 0) <= 0 && reachable && pet.grounded) {
+      const behind = Math.sign(dx) !== pet.facing && Math.abs(dx) > KIN_BEHIND;
+      if (behind) {
+        pet.facing = Math.sign(dx) as 1 | -1;
+        pet.lock = KIN_LOCK_TICKS;
+      }
+    }
+    // climbing, kin style: target's up there and there's a shelf a hop ahead -> take it
+    if (overhead && canHop && shelfAhead(sim.level, pet.x, pet.y, pet.facing)) hop();
+    // headbutt lunge: same floor, in front, close
+    if (
+      !granny &&
+      sameFloor &&
+      pet.grounded &&
+      (pet.lunge ?? 0) <= 0 &&
+      (pet.lungeCd ?? 0) <= 0 &&
+      Math.sign(dx) === pet.facing &&
+      Math.abs(dx) < KIN_LUNGE_RANGE
+    ) {
+      pet.lunge = KIN_LUNGE_TICKS;
+      pet.lungeCd = KIN_LUNGE_CD;
+      emit(sim, { t: "sfx", name: "cousinYell", pitch: 1.25 });
+    }
+    pet.vx = pet.facing * speed * ((pet.lunge ?? 0) > 0 ? KIN_LUNGE_MULT : 1);
+    // ledge: run right off it, unless the target's up there ahead and a jump can
+    // make it. No cooldown check: leaving the ledge is its own anti-pogo.
+    if (pet.grounded && !groundAhead(sim.level, pet.x, pet.y, pet.facing, 12)) {
+      if (inHopRange && !granny && Math.sign(dx) === pet.facing) hop();
+    }
+  } else {
+    // nothing to headbutt: jog back toward the owner, commit so we don't jitter
+    pet.lunge = 0;
+    if (owner && pet.grounded && (pet.lock ?? 0) <= 0) {
+      const dx = owner.x - pet.x;
+      if (Math.abs(dx) > KIN_LEASH && Math.sign(dx) !== pet.facing) {
+        pet.facing = Math.sign(dx) as 1 | -1;
+        pet.lock = KIN_LOCK_TICKS * 1.5;
+      }
+    }
+    const near = owner ? Math.abs(owner.x - pet.x) <= KIN_LEASH : false;
+    pet.vx = near ? 0 : pet.facing * speed * 0.5;
+    if (pet.grounded && !groundAhead(sim.level, pet.x, pet.y, pet.facing, 12)) {
+      // don't wander off the edge for nothing
+      pet.vx = 0;
+    }
+  }
+}
+
 function stepPet(sim: Sim, pet: Pet): boolean {
   const owner = sim.players.find((p) => p.index === pet.owner);
   const frenzyLive =
@@ -652,16 +818,9 @@ function stepPet(sim: Sim, pet: Pet): boolean {
       break;
     }
     case "cousin":
-    case "granny": {
-      const target = nearestEnemy(sim, pet.x, pet.y);
-      if (target) pet.facing = (Math.sign(target.x - pet.x) || pet.facing) as 1 | -1;
-      pet.vx = pet.facing * 2.1;
-      if (pet.grounded && !groundAhead(sim.level, pet.x, pet.y, pet.facing, 12)) {
-        pet.vy = -5.5;
-        pet.grounded = false;
-      }
+    case "granny":
+      stepKin(sim, pet, owner);
       break;
-    }
     case "hound": {
       const target = nearestEnemy(sim, pet.x, pet.y);
       if (target) {
@@ -684,13 +843,28 @@ function stepPet(sim: Sim, pet: Pet): boolean {
   pet.y = moved.y;
   pet.vy = moved.vy;
   pet.grounded = moved.grounded || standingOnGround(sim.level, pet.x, pet.y, 20);
-  if (moved.hitWall) pet.facing = -pet.facing as 1 | -1;
+  const kin = pet.kind === "cousin" || pet.kind === "granny";
+  if (moved.hitWall) {
+    if (kin) {
+      // BONK: kin runs face-first into the wall, sees stars, then turns around
+      if ((pet.bonk ?? 0) <= 0) {
+        pet.bonk = pet.kind === "granny" ? KIN_BONK_TICKS_GRANNY : KIN_BONK_TICKS;
+        pet.mode = 2;
+        pet.lunge = 0;
+        emit(sim, { t: "sfx", name: "cousinBonk", pitch: pet.kind === "granny" ? 0.8 : 1 });
+        emit(sim, { t: "burst", text: pet.kind === "granny" ? "OOF!" : "BONK!", x: pet.x, y: pet.y - 26 });
+      }
+    } else {
+      pet.facing = -pet.facing as 1 | -1;
+    }
+  }
 
-  // bite/headbutt
-  if (pet.mode !== 1) {
+  // bite/headbutt (bonked kin is harmless)
+  if (pet.mode === 0) {
+    const hbW = pet.kind === "granny" ? 30 : 22; // rolling pin reach
     for (const e of sim.enemies) {
       if (e.phase.kind !== "normal") continue;
-      if (circleOverlapsBox(e.x, e.y - 12, 13, pet.x, pet.y, 22, 22)) {
+      if (circleOverlapsBox(e.x, e.y - 12, 13, pet.x, pet.y, hbW, 22)) {
         killEnemyByWeapon(sim, e, pet.owner, pet.power);
         if (pet.kind === "hound") {
           // hounds knock enemies toward the owner's bubbles instead of killing

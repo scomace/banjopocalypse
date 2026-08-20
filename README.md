@@ -34,6 +34,8 @@ load (`src/aachar/baker.ts`).
 - `/#/admin/baker` bake QA: live rig vs baked sheets
 - `?quickstart=1&cast=earl&level=12&seed=5` jump straight into a run
 - `npx tsx scripts/sim-smoke.mts` headless sim torture test
+- `node scripts/qa-wind.mjs` browser QA for wind (air-special stamina): pips drain, a gassed press stumbles, screenshot in `qa-wind.png` (needs `vite --port 5200`)
+- sampled SFX: drop an mp3/wav in `public/sounds/` and register it in `SAMPLE_SFX` (`src/game/audio/engine.ts`); a missing file falls back to synth. `wind-fail.mp3` / `wind-strain.mp3` are the wind slots
 - `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)
 - every level is input-recorded; in the browser console `__banjo.verifyLastReplay()` re-runs the last finished level headless and confirms the tick-perfect hash (`__banjo.verifyReplayNow()` mid-level; `__banjo.lastReplay` is the `{config, log}` itself)
 - `node scripts/qa-replay.mjs` browser E2E: real keyboard play, then the page re-simulates its own input log and must hash-match (needs `vite --port 5200`)

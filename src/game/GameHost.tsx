@@ -6,7 +6,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type Phaser from "phaser";
 import { bakeCast, type BakedCharacter } from "../aachar/baker";
-import { castById } from "./cast";
+import { CAST, castById } from "./cast";
 import { DEFAULT_BINDINGS, InputSampler, SOLO_BINDINGS } from "./core/input";
 import { LocalInputSource, type InputSource } from "./core/inputsource";
 import { ReplayRecorder, saveLastReplay, verifyReplay, type LevelReplay } from "./replay";
@@ -39,7 +39,7 @@ import { GameOverOverlay } from "./ui/GameOverOverlay";
 import { LevelIntroOverlay } from "./ui/LevelIntroOverlay";
 import { WeaponAcquiredOverlay } from "./ui/WeaponAcquiredOverlay";
 import { FxOverlay, type FxOverlayHandle } from "./fx/FxOverlay";
-import { saveCheckpoint } from "./core/save";
+import { markRescued, saveCheckpoint } from "./core/save";
 
 export type GameFlow =
   /** `resume`: back from a mid-level hold (shrine reveal) — no level intro */
@@ -291,7 +291,11 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
   // bake the cast once
   useEffect(() => {
     let cancelled = false;
-    const names = castIds.filter(Boolean).map((id) => castById(id!).aachar);
+    // ...plus every caged cousin, so their rig is ready when a cage level loads
+    const names = [
+      ...castIds.filter(Boolean).map((id) => castById(id!).aachar),
+      ...CAST.filter((m) => m.rescue).map((m) => m.aachar),
+    ].filter((n, i, arr) => arr.indexOf(n) === i);
     bakeCast(names).then((results) => {
       if (cancelled) return;
       const map = new Map<string, BakedCharacter>();
@@ -337,6 +341,8 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
             if (e.t === "shake") {
               const scene = game.scene.getScene("play") as Phaser.Scene | null;
               scene?.cameras.main.shake(120, 0.004 * e.power);
+            } else if (e.t === "rescue") {
+              markRescued(e.cast);
             }
           }
         },

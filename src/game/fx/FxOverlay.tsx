@@ -96,6 +96,9 @@ export const FxOverlay = forwardRef<FxOverlayHandle>(function FxOverlay(_, ref) 
             () => setBursts((bs) => bs.filter((b) => b.id !== burst.id)),
             ttl,
           );
+        } else if (e.t === "balloon" && e.text && e.at) {
+          // a non-player speaker (the caged cousin): its own slot, fixed anchor
+          spawnBalloon(root, balloonsRef.current, e.text, { x: e.at.x, y: e.at.y }, e.player);
         } else if (e.t === "balloon") {
           const p = sim.players.find((q) => q.index === e.player);
           // Note: the death bark is emitted right after p.alive flips false,

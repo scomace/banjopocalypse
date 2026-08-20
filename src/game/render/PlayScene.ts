@@ -31,7 +31,7 @@ import {
 import { CRITTER_SPRITES, BOSS_SPRITES, MISC_CRITTERS } from "./sprites-critters";
 import {
   FOOD_SPRITES,
-  MISC_ITEM_SPRITES,
+  CAGE_RIGS, MISC_ITEM_SPRITES,
   PROJECTILE_SPRITES,
   SPECIAL_SPRITES,
 } from "./sprites-items";
@@ -219,7 +219,10 @@ export class PlayScene extends Phaser.Scene {
         const lean = -Math.atan2(p.x - hold.ax, p.y - hold.ay) * (180 / Math.PI) * 0.85;
         s.setAngle(Math.max(-32, Math.min(32, lean)));
       } else {
-        s.setAngle(p.flutterTicks > 0 ? p.facing * 13 : 0);
+        // (or the gassed-out stumble: a drunk wobble, legs every which way)
+        s.setAngle(
+          p.stumbleTicks > 0 ? Math.sin(t * 1.1) * 16 : p.flutterTicks > 0 ? p.facing * 13 : 0,
+        );
       }
       const animKey = `${texKey}:${p.anim}`;
       if (s.anims.currentAnim?.key !== animKey && this.anims.exists(animKey)) {
@@ -300,6 +303,76 @@ export class PlayScene extends Phaser.Scene {
       else s.clearTint();
     }
 
+    // rescue cage: a per-cousin rig (back layer behind them, front layer in
+    // front), a brass padlock that chips with every hit, the cousin idling
+    // inside; once popped they take a bow and jog off stage right
+    if (sim.cage) {
+      const c = sim.cage;
+      const rig = CAGE_RIGS[c.castId];
+      const open = c.openedTick >= 0;
+      const since = open ? t - c.openedTick : 0;
+      const rattleX = c.rattle > 0 ? Math.round(Math.sin(t * 2.3) * 2) : 0;
+      const frame = open ? 1 : 0;
+      const cx = Math.round(c.x) + rattleX;
+      const cy = Math.round(c.y);
+      if (rig?.back) {
+        const back = this.obtain("cageback", `i:${rig.back}#0`, 29);
+        back.setTexture(`i:${rig.back}#${frame}`);
+        back.setOrigin(0.5, 1);
+        back.setScale(2);
+        back.setPosition(cx, cy);
+      }
+      if (since < 170) {
+        const aachar = castAachar(c.castId);
+        const baked = this.baked.get(aachar);
+        if (baked) {
+          const texKey = `cast:${aachar}`;
+          const kin = this.obtain("cagekin", texKey, open ? 32 : 30);
+          kin.setDepth(open ? 32 : 30);
+          kin.setOrigin(baked.anchorX / baked.frameW, baked.groundY / baked.frameH);
+          kin.setScale(1);
+          const jog = since > 70 ? (since - 70) * 1.8 : 0;
+          kin.setPosition(Math.round(c.x + jog) + rattleX, cy);
+          kin.setFlipX(open && since > 70); // baked art faces left
+          kin.setAlpha(since > 130 ? Math.max(0, 1 - (since - 130) / 40) : 1);
+          kin.setAngle(0);
+          kin.clearTint();
+          const pose = castById(c.castId).rescue?.pose ?? "idle";
+          const animKey = `${texKey}:${!open ? pose : since <= 70 ? "victory" : "run"}`;
+          if (kin.anims.currentAnim?.key !== animKey && this.anims.exists(animKey)) {
+            kin.play(animKey);
+          }
+        }
+      }
+      if (rig) {
+        const front = this.obtain("cagefront", `i:${rig.front}#0`, 31);
+        front.setTexture(`i:${rig.front}#${frame}`);
+        front.setOrigin(0.5, 1);
+        front.setScale(2);
+        front.setPosition(cx, cy);
+        if (c.rattle > 10 && !open) front.setTintFill(0xfff6d8);
+        else front.clearTint();
+        if (!open) {
+          const lock = this.obtain("cagelock", "i:padlock#0", 33);
+          lock.setTexture(`i:padlock#${Math.min(2, c.hits)}`);
+          lock.setOrigin(0.5, 0.5);
+          lock.setScale(2);
+          lock.setPosition(cx + rig.lock[0] * 2, cy + rig.lock[1] * 2);
+          lock.setAngle(c.rattle > 0 ? Math.sin(t * 2.3) * 16 : 0);
+          lock.setAlpha(1);
+        } else if (since < 420) {
+          // the busted lock lies on the deck, then fades
+          const lock = this.obtain("cagelock", "i:padlock#2", 33);
+          lock.setTexture("i:padlock#2");
+          lock.setOrigin(0.5, 0.5);
+          lock.setScale(2);
+          lock.setPosition(cx + 30, cy - 8);
+          lock.setAngle(78);
+          lock.setAlpha(since > 360 ? 1 - (since - 360) / 60 : 1);
+        }
+      }
+    }
+
     // weapon shrine: pedestals, bobbing gifts, a beam you can see across the map
     if (sim.shrine) {
       const sh = sim.shrine;
@@ -362,7 +435,8 @@ export class PlayScene extends Phaser.Scene {
       s.setOrigin(0.5, 1);
       s.setPosition(Math.round(pet.x), Math.round(pet.y));
       s.setFlipX(pet.facing === 1);
-      s.setAngle(pet.mode === 1 ? 90 : 0); // possum playing dead
+      // possum playing dead = flat out; bonked kin = woozy wobble
+      s.setAngle(pet.mode === 1 ? 90 : pet.mode === 2 ? Math.sin((t + pet.id) * 0.9) * 14 : 0);
     }
 
     // items

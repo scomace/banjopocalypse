@@ -4,7 +4,7 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { AaSceneCharacter } from "@/lib/aachar/AaSceneCharacter";
-import { CAST, castById, type CastMember } from "../game/cast";
+import { CAST, castById, castUnlocked, type CastMember } from "../game/cast";
 import {
   addScoreEntry,
   loadSave,
@@ -110,12 +110,15 @@ export function TitleScreen({
 export function CastCard({
   member,
   locked,
+  rescued,
   selected,
   color,
   onPick,
 }: {
   member: CastMember;
   locked: boolean;
+  /** busted out of their cage on this save (earns a tag) */
+  rescued?: boolean;
   selected: number[]; // player indexes that picked this
   color?: string;
   onPick: () => void;
@@ -140,11 +143,30 @@ export function CastCard({
         <AaSceneCharacter aachar={{ name: member.aachar }} animation={selected.length ? "greeting1" : "idle"} size={0.55} />
       </div>
       <div className="mt-1 font-display text-lg uppercase leading-none text-white">
-        {locked ? "????" : member.displayName}
+        {member.displayName}
       </div>
-      <div className="mt-1 h-8 font-pixel text-[7px] leading-relaxed text-white/55">
-        {locked ? `CLEAR ${member.unlockWorlds} WORLDS` : member.bio}
-      </div>
+      {locked && member.rescue ? (
+        <>
+          <div className="mt-1 font-pixel text-[7px] leading-relaxed text-[#ffd84a]">
+            CAGED · WORLD {member.rescue.world} · LEVEL {member.rescue.level}
+          </div>
+          <div className="mt-1 min-h-8 font-pixel text-[6px] leading-relaxed text-white/45">
+            {member.rescue.where}
+          </div>
+        </>
+      ) : (
+        <div className="mt-1 h-8 font-pixel text-[7px] leading-relaxed text-white/55">
+          {member.bio}
+        </div>
+      )}
+      {rescued && !locked && (
+        <div
+          className="absolute right-1 top-1 border px-1 font-pixel text-[6px] leading-relaxed"
+          style={{ borderColor: "#9be8c8", color: "#9be8c8", background: "rgba(0,0,0,0.6)" }}
+        >
+          RESCUED
+        </div>
+      )}
       {!locked && (
         <div className="mt-1 font-pixel text-[7px] text-[#ffd84a]">
           SPD{member.speed} PUF{member.puff} JMP{member.jump} LCK{member.luck}
@@ -222,7 +244,8 @@ export function SelectScreen({
           <CastCard
             key={m.id}
             member={m}
-            locked={save.worldsCleared < m.unlockWorlds}
+            locked={!castUnlocked(m, save)}
+            rescued={save.castRescued.includes(m.id)}
             selected={picks.map((p, i) => (p === m.id ? i : -1)).filter((i) => i >= 0)}
             onPick={() => pickFor(m)}
           />

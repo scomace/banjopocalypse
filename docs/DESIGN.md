@@ -91,7 +91,9 @@ Clips needed per player character (mapped from the 35 original AA clips): `idle,
 ## 4. Core gameplay
 
 ### Movement
-Run (walk 4.5 tiles/s), jump (3.5 tiles high, fixed arc, no double jump), no attack besides bubbles outside frenzies. Coyote time 4 ticks, jump buffer 6 ticks. Bubble-bounce: holding jump while landing on your own bubble bounces you higher (bubble survives 1 bounce, pops on 2nd).
+Run (walk 4.5 tiles/s), jump (3.5 tiles high, fixed arc), no attack besides bubbles outside frenzies. Coyote time 4 ticks, jump buffer 6 ticks. Bubble-bounce: holding jump while landing on your own bubble bounces you higher (bubble survives 1 bounce, pops on 2nd).
+
+**Air specials + wind.** The second JUMP press midair is the cousin's air special (Earl's honest double, Merle's flutter, Cooter's jugblast, Bobbie Sue's recoil, Zeke's bolt, Granny's toot; Buford casts the Fishin' Line instead and Darlene holds to glide). Air specials run on **wind**: 5 pips, shown under the lives in the HUD. Each special spends one; pips come back one per 2 s with boots on the ground. Gassed out (0 pips), a press is a coin flip rolled ONCE per airtime (no mash-reroll): heads it fires, tails it's a **stumble** (hiccup, a hop at 35% of a double, wobbly legs, `HIC!` burst, a winded bark). The last pips wheeze so the cliff is heard coming. Wind refills on level start, respawn and the Second Pour. Buford's cast and Darlene's chute aren't jumps and cost nothing; boss floors are exempt. Tunables: `WIND_*` in `sim/constants.ts` (`WIND_ENABLED` is the kill switch); logic in `sim/wind.ts`. Sounds: `windStrain` / `windFail` play `public/sounds/wind-strain.mp3` / `wind-fail.mp3` when present (see `SAMPLE_SFX` in `audio/engine.ts`), synth fallback otherwise.
 
 ### Bubbles
 - **Blow** (X / gamepad B): the character *burps* the bubble out. Every blow plays a small pitch-varied **'hic'** SFX with a tiny hiccup pose twitch. The bubble travels horizontally ~3 tiles (stat/tonic-modified) then floats up, following per-level wind currents (levels define current vector fields; this is the level-design spice).
@@ -109,7 +111,7 @@ Clear all enemies → remaining bubbles turn to bonus food → 3 s celebration (
 - Continues: 3 per run; a continue restarts the current **world** with arsenal reset to signature weapon.
 
 ### Saves (confirmed: world checkpoints)
-Auto-unlock at each world start (levels 1, 12, 23…). New runs start at any unlocked world. Within-run state (arsenal, lives, score) never persists across sessions. localStorage schema `banjo/v1/{profiles,unlocks,scores,settings}` behind the Storage adapter.
+Auto-unlock at each world start (levels 1, 12, 23…), written the moment the prior boss falls and kept for good. New runs start at any unlocked world. Rescued cousins (`castRescued`) persist the same way (see Rescue cages in section 6). Within-run state (arsenal, lives, score) never persists across sessions. localStorage schema `banjo/v1/{save,scores,settings}` behind the Storage adapter.
 
 ---
 
@@ -153,13 +155,15 @@ Hand shape: one weapon card whenever one exists, **at most one tonic** (always o
 | 8 | **Chicken Coop** | chicken flaps horizontally across screen | +chickens, eggs drop as bombs | **Fowl Weather** - raining hens |
 | 9 | **Spittoon Special** | arcing spit glob, pierces 2 | pierce, size, +globs | **Long-Range Loogie** - full-screen artillery arc |
 | 10 | **Lightnin' Rod** | random bolt strikes an enemy every 3 s | rate, chain-jump count | **Act of God** - continuous storm |
-| 11 | **Cousin Eddie** | AI kinfolk runs around headbutting | speed, damage, +cousin@L4 | **Family Reunion** - 3 cousins + granny with a rolling pin |
+| 11 | **Cousin Eddie** | kinfolk linebacker: commits to a direction, headbutt-lunges, bonks off walls, runs off ledges | speed, damage, +cousin@L4 | **Family Reunion** - 3 cousins + granny with a rolling pin |
 | 12 | **Hound Dawg** | dog charges nearest enemy, knocks it into bubbles | speed, +dog | **The Howlin'** - pack of 4, howl stuns screen |
 
 ### Tonics (passives; also evolution keys)
 **Grit** (+damage) · **Rocket-Fuel Shine** (+move speed) · **Lung Butter** (+bubble range/speed) · **Hog Fat** (survive 1 hit per level) · **Lucky Rabbit Foot** (+drops, +jar frequency) · **Extra Pickin' Finger** (+5 s frenzy duration) · **Granny's Spectacles** (+pickup magnet radius) · **Chaw of Immortality** (+1 max life, once per run)
 
 Evolution pairings (weapon → required tonic): Good Book→Spectacles, Twang→Pickin' Finger, Jug→Rocket-Fuel, Scattergun→Grit, Possum→Rabbit Foot, Boinger→Lung Butter, Washboard→Hog Fat, Chicken→Rabbit Foot, Spittoon→Lung Butter, Lightnin'→Pickin' Finger, Eddie→Chaw, Hound→Grit.
+
+**Kin AI (Cousin Eddie / Family Reunion).** Kin are dumb linebackers, not pathfinders: they commit to a direction (facing is locked for 20 ticks after any turn, and only changes with boots on the ground), run straight through varmints, **bonk** off walls (stunned `BONK!`/`OOF!` for 15/24 ticks, then turn once), and run straight off ledges (the vertical wrap brings them back around). They only turn for a varmint on their own floor or within a hop overhead; a target on a higher floor is chased by *climbing*: hop when a shelf is within a jump ahead, or leap off a ledge toward it. A same-floor varmint in front triggers a headbutt **lunge** (2× speed for 10 ticks). Granny is slower, never hops, and swats wider. Nearby-but-unreachable targets never cause pacing or in-place jitter by design. Logic: `stepKin` in `sim/weapons.ts` (`KIN_*` tunables); `npx tsx scripts/qa-eddie.mts` measures flip rate, stuck time, bonks, hops and kills across several layouts.
 
 ---
 
@@ -173,12 +177,29 @@ All built in the aachar editor as manifest characters tagged `banjo-cast`. Stats
 |---|---|---|---|---|---|
 | **Earl** | Adventurer | The responsible twin. Plays a mean five-string. | Twang Wave | 3/3/3/3 | start (P1 default) |
 | **Merle** | Adventurer2 | The other twin. Legally distinct from Earl. | Jaw Harp Boinger | 4/3/3/2 | start (P2 default) |
-| **Granny Mae** | Ida | Owns the still. Owns everyone in checkers. | Granny's Good Book | 2/3/2/5 | start |
-| **Cooter** | Lou | Volunteer fire chief. Started most of the fires. | Moonshine Jug | 3/2/3/3 (+2 s frenzy) | start |
-| **Bobbie Sue** | Adventurer3 | County skeet champ, 9 years runnin'. | Ol' Scattergun | 4/4/2/2 | clear World 2 |
-| **Darlene** | afsdf | Talks to possums. They talk back. | Possum Posse | 3/3/3/4 | clear World 4 |
-| **Buford** | Zed2 | Once jumped the crick. The *wide* part. | Washboard Scrub | 2/2/5/3 | clear World 6 |
-| **Grandpappy Zeke** | Zeddington | Struck by lightning 6 times. Likes it. | Lightnin' Rod | 2/5/2/3 | clear World 8 |
+| **Granny Mae** | Ida | Owns the still. Owns everyone in checkers. | Granny's Good Book | 2/3/2/5 | rescue: World 1, level 4 |
+| **Cooter** | Lou | Volunteer fire chief. Started most of the fires. | Moonshine Jug | 3/2/3/3 (+2 s frenzy) | rescue: World 3, level 8 |
+| **Bobbie Sue** | Adventurer3 | County skeet champ, 9 years runnin'. | Ol' Scattergun | 4/4/2/2 | rescue: World 2, level 6 |
+| **Darlene** | afsdf | Talks to possums. They talk back. | Possum Posse | 3/3/3/4 | rescue: World 4, level 6 |
+| **Buford** | Zed2 | Once jumped the crick. The *wide* part. | Washboard Scrub | 2/2/5/3 | rescue: World 5, level 8 |
+| **Grandpappy Zeke** | Zeddington | Struck by lightning 6 times. Likes it. | Lightnin' Rod | 2/5/2/3 | rescue: World 8, level 9 |
+
+### Rescue cages (confirmed 2026-08-20)
+
+The twins start unlocked so a fresh save can field two players. Everyone else is **met in the levels**: one cousin per listed world sits in a padlocked cage (the level's `R` tile, off the main route but visible from it, never on a shrine or boss level). Each rig is its own art (root-cellar hatch, chain-link lockup, propane tank + chains, gilded sideshow cage, hanging bait cage, storm tower + straps; a back layer draws behind the cousin, a front layer in front) with one shared brass padlock. The caged cousin **calls out** in a speech balloon ~2.5 s into play and every ~9 s after (`cagedLines`, rotating) so the detour gets noticed. Body-check the bars or hit them with a frenzy weapon: **3 hits** pops the lock; the padlock visibly chips and wobbles (whole → cracked → busted) while the cousin eggs you on from the cage ("Harder! It's rusted shut!"), then the JOINED THE KIN banner lands center-screen so the cage corner stays clear. The cousin steps out, does a `victory` bow, gets their line in a balloon, jogs off stage right; food shower + 5000 pts to whoever landed the last hit; `{t:"rescue"}` event → host writes `castRescued` to the save. Either co-op player popping it unlocks for both (save is per machine). The cage is **always present**, even once rescued, so the sim stays save-independent for lockstep; a repeat is just the food and points.
+
+**Fallback so nobody gets soft-locked:** clearing a cousin's world unlocks them regardless (`castUnlocked` in `cast.ts`), which also covers runs started from a later checkpoint. `UNLOCK_ALL_CAST` in `cast.ts` opens the whole roster for testing.
+
+| World | Level | Cousin | The situation |
+|---|---|---|---|
+| 1 The Holler | 4 | Granny Mae | The still blew. She's in the root cellar under the homestead, door wedged shut, neighbors shuffling on top of it. Practically on the main path: this is the tutorial rescue. *"Took y'all long enough. Who's been in my checkers?"* |
+| 2 Flooded Mega-Mart | 6 | Bobbie Sue | Rode out the flood in the sporting-goods lockup, the chain-link cage behind the counter, sniping catfish through the mesh. *"Nine years runnin'. Ten, now."* |
+| 3 Meth Lab Caverns | 8 | Cooter | Came down to "investigate the fire hazard." The Chemist's cultists chained him to a glowing propane tank on a ledge under the spikes. *"I was INVESTIGATIN'. Officially."* |
+| 4 Radioactive County Fair | 6 | Darlene | Billed as THE POSSUM WHISPERER, 25 cents a look, in a gilded sideshow cage at the end of the big midway platform, six possums stacked on her head. *"Y'all took yer time. The possums was gettin' ideas."* |
+| 5 Gator Bayou | 8 | Buford | Tried to jump the bayou. The wide part. Hanging in a gator-hunter's bait cage off a cypress limb over the open water, his own line tangled round it. *"I'd have made it. Wind shifted."* |
+| 8 Tornado Alley | 9 | Grandpappy Zeke | Not trapped so much as waiting: strapped to a storm-chaser's weather tower with lightning hitting the rod next to him, delighted. Strike #7 lands as you cut him loose. *"Seven! Told y'all seven was the good one."* |
+
+Worlds 6, 7 and 9 have no cousin cage. Ideas on the shelf: W6 a county prison bus with Cousin Eddie inside (permanent AI kinfolk for the run, or a secret 9th pick); W7 a containment cage holding a spare continue or still parts; W9 no cage, the whole family's already on the porch for the finale.
 
 ---
 

@@ -30,9 +30,51 @@ export type CastMember = {
   airSpecial?: "hook" | "flutter" | "fart" | "jugblast" | "recoil" | "glide" | "bolt";
   /** Short perk label for the select screen. */
   perkLabel?: string;
-  /** Cleared-world count required before this character unlocks. */
-  unlockWorlds: number;
+  /**
+   * Where this cousin is caged. Absent = a starter (Earl and Merle, the
+   * twins, so a fresh save can still field two players). Rescued cousins
+   * unlock for good; clearing their world unlocks them anyway so nobody
+   * gets soft-locked out of a cousin by walking past the cage.
+   */
+  rescue?: RescueSpot;
 };
+
+export type RescueSpot = {
+  /** world 1..9 */
+  world: number;
+  /** level in world 1..10 (never the boss level 11 or shrine level 5) */
+  level: number;
+  /** one line of where/how they're stuck (select screen + design) */
+  where: string;
+  /** what they holler when the lock pops */
+  line: string;
+  /** what they call out from the cage, rotating, every few seconds */
+  cagedLines: string[];
+  /** baked clip while caged; default idle (goof = sat down / slumped) */
+  pose?: "idle" | "goof";
+};
+
+/**
+ * Dev switch: when true every cousin is pickable regardless of save progress.
+ * Flip to false to play the rescue-cage unlocks for real.
+ */
+export const UNLOCK_ALL_CAST = true;
+
+/** Is this cousin pickable given the player's save? */
+export function castUnlocked(
+  member: CastMember,
+  save: { worldsCleared: number; castRescued: string[] },
+): boolean {
+  if (UNLOCK_ALL_CAST || !member.rescue) return true;
+  return save.castRescued.includes(member.id) || save.worldsCleared >= member.rescue.world;
+}
+
+/** The cousin caged on this absolute level (1..99), if any. */
+export function rescueForLevel(levelIndex1: number): CastMember | null {
+  const world = Math.floor((levelIndex1 - 1) / 11) + 1;
+  const inWorld = ((levelIndex1 - 1) % 11) + 1;
+  return CAST.find((m) => m.rescue && m.rescue.world === world && m.rescue.level === inWorld) ?? null;
+}
 
 export const CAST: CastMember[] = [
   {
@@ -43,7 +85,6 @@ export const CAST: CastMember[] = [
     signatureWeapon: "twang",
     speed: 3, puff: 3, jump: 3, luck: 3,
     perkLabel: "HONEST DOUBLE JUMP",
-    unlockWorlds: 0,
   },
   {
     id: "merle",
@@ -54,7 +95,6 @@ export const CAST: CastMember[] = [
     speed: 4, puff: 3, jump: 3, luck: 2,
     airSpecial: "flutter",
     perkLabel: "LEGALLY DISTINCT FLUTTER",
-    unlockWorlds: 0,
   },
   {
     id: "granny",
@@ -65,7 +105,17 @@ export const CAST: CastMember[] = [
     speed: 2, puff: 3, jump: 2, luck: 5,
     airSpecial: "fart",
     perkLabel: "BEAN POWER",
-    unlockWorlds: 0,
+    rescue: {
+      world: 1,
+      level: 4,
+      where: "the root cellar under the homestead, door wedged shut since the still blew",
+      line: "Took y'all long enough. Who's been in my checkers?",
+      cagedLines: [
+        "Over here! Mind the preserves.",
+        "Y'all gonna stand there or open this?",
+        "I can hear ya breathin'.",
+      ],
+    },
   },
   {
     id: "cooter",
@@ -78,7 +128,18 @@ export const CAST: CastMember[] = [
     frenzyBonus: 2,
     airSpecial: "jugblast",
     perkLabel: "LONG FRENZY · JUG BLAST",
-    unlockWorlds: 0,
+    rescue: {
+      world: 3,
+      level: 8,
+      where: "chained to a glowin' propane tank by the Chemist's cultists",
+      line: "I was INVESTIGATIN'. Officially.",
+      cagedLines: [
+        "Don't spark nothin'. Tank's full.",
+        "Lil help? Chains itch.",
+        "Hic. Anybody got a light? KIDDIN'.",
+      ],
+      pose: "goof",
+    },
   },
   {
     id: "bobbiesue",
@@ -89,7 +150,17 @@ export const CAST: CastMember[] = [
     speed: 4, puff: 4, jump: 2, luck: 2,
     airSpecial: "recoil",
     perkLabel: "RECOIL JUMP",
-    unlockWorlds: 2,
+    rescue: {
+      world: 2,
+      level: 6,
+      where: "the sporting-goods lockup, snipin' catfish through the mesh",
+      line: "Nine years runnin'. Ten, now.",
+      cagedLines: [
+        "Psst. Lockup. Shells are gettin' low.",
+        "Somebody pop this cage!",
+        "Nine years champ and I'm stuck in here.",
+      ],
+    },
   },
   {
     id: "darlene",
@@ -100,7 +171,17 @@ export const CAST: CastMember[] = [
     speed: 3, puff: 3, jump: 3, luck: 4,
     airSpecial: "glide",
     perkLabel: "POSSUM CHUTE",
-    unlockWorlds: 4,
+    rescue: {
+      world: 4,
+      level: 6,
+      where: "the sideshow tent: THE POSSUM WHISPERER, 25 cents a look",
+      line: "Y'all took yer time. The possums was gettin' ideas.",
+      cagedLines: [
+        "Twenty-five cents to look. Free to free me.",
+        "Possums say: over here.",
+        "Quit gawkin' and whack the lock!",
+      ],
+    },
   },
   {
     id: "buford",
@@ -111,8 +192,17 @@ export const CAST: CastMember[] = [
     speed: 2, puff: 2, jump: 5, luck: 3,
     airSpecial: "hook",
     perkLabel: "FISHIN' LINE",
-    // Was 6; opened up so the Fishin' Line can be play-tested from a fresh save.
-    unlockWorlds: 0,
+    rescue: {
+      world: 5,
+      level: 8,
+      where: "a gator-hunter's bait cage swingin' off a cypress limb, own line tangled round it",
+      line: "I'd have made it. Wind shifted.",
+      cagedLines: [
+        "Up here! The wide part got me.",
+        "Line's tangled. Hit the lock!",
+        "Gators is circlin'. No rush. SOME rush.",
+      ],
+    },
   },
   {
     id: "zeke",
@@ -123,7 +213,17 @@ export const CAST: CastMember[] = [
     speed: 2, puff: 5, jump: 2, luck: 3,
     airSpecial: "bolt",
     perkLabel: "SEVENTH STRIKE",
-    unlockWorlds: 8,
+    rescue: {
+      world: 8,
+      level: 9,
+      where: "strapped to a storm-chaser's weather tower, waitin' on strike seven",
+      line: "Seven! Told y'all seven was the good one.",
+      cagedLines: [
+        "Six down. Cut me loose for seven!",
+        "Storm's comin'. I'm countin' on it.",
+        "Up top! Mind the rod!",
+      ],
+    },
   },
 ];
 

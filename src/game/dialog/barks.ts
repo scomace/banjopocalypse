@@ -11,6 +11,17 @@
 type BarkPool = Record<string, string[]>;
 
 const SHARED: BarkPool = {
+  winded: [
+    "Hic! Legs gave out.",
+    "Outta wind, outta luck.",
+    "Whew... gimme a sec.",
+    "My get-up-and-go got up and went.",
+    "Too much shine, not enough spring.",
+    "Hic! Wrong pipe!",
+    "Lungs say no.",
+    "Lord, I'm winded.",
+    "Gravity's got opinions today.",
+  ],
   levelIntro: [
     "Y'all smell that? Smells like cousin Peggy Sue's parfume...",
     "Another county, same varmints.",

@@ -63,6 +63,7 @@ import {
   SPECIAL_INTERVAL_TICKS,
   TICK_HZ,
   TILE,
+  WIND_MAX,
 } from "./constants";
 import {
   circleOverlapsBox,
@@ -91,7 +92,9 @@ import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
 import { applyHookConstraint, castLine, stepHookBody, stepHookControl } from "./hook";
 import { fireAirSpecial } from "./airspecials";
+import { refillWind, regenWind, spendWind, stumble } from "./wind";
 import { createShrine, nagShrine, shrineHoldsLevel, stepShrine } from "./shrine";
+import { createCage, hitCage, stepCage, touchesCage } from "./cage";
 
 export type SimPlayerConfig = {
   castId: string;
@@ -140,6 +143,9 @@ export function createSim(cfg: SimConfig): Sim {
       coyote: 0,
       jumpBuffer: 0,
       airJumpUsed: false,
+      wind: WIND_MAX,
+      windTicks: 0,
+      stumbleTicks: 0,
       flutterTicks: 0,
       gliding: false,
       jumpHeld: false,
@@ -211,7 +217,9 @@ export function createSim(cfg: SimConfig): Sim {
     secretEntered: false,
     shrine: null,
     shrineTaken: null,
+    cage: null,
   };
+  sim.cage = createCage(cfg.levelIndex, level, cfg.isBoss);
 
   // Enemies present from tick 0 (non-boss levels).
   if (!cfg.isBoss) {
@@ -276,6 +284,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
         p.vy = 0;
         p.invuln = P_INVULN_TICKS;
         p.anim = "idle";
+        refillWind(p);
       }
     }
     return;
@@ -324,6 +333,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (p.grounded) {
     p.coyote = COYOTE_TICKS;
     p.airJumpUsed = false;
+    regenWind(sim, p);
   } else if (p.coyote > 0) p.coyote--;
 
   if (p.jumpBuffer > 0 && p.coyote > 0) {
@@ -346,7 +356,10 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       // is a one-shot burst
       p.airJumpUsed = true;
       p.jumpBuffer = 0;
-      fireAirSpecial(sim, p, airSpecial);
+      // ...and it costs wind: one roll per airtime, a gassed-out whiff
+      // stumbles instead (wind.ts)
+      if (spendWind(sim, p)) fireAirSpecial(sim, p, airSpecial);
+      else stumble(sim, p);
     }
   }
   // variable jump height (a Fishin' Line launch or head bounce is not a
@@ -466,6 +479,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     }
   }
 
+  // rescue cage: a body check on the bars is a hit on the padlock
+  if (sim.cage && sim.cage.openedTick < 0 && sim.cage.hitCooldown <= 0 && touchesCage(sim.cage, p)) {
+    hitCage(sim, p.index);
+  }
+
   // invuln / prayer / bounce timers
   if (p.invuln > 0) p.invuln--;
   if (p.prayer > 0) p.prayer--;
@@ -478,6 +496,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       emit(sim, { t: "sfx", name: "boingSmall", pitch: 1.5 + (p.flutterTicks % 3) * 0.08 });
     }
   }
+  if (p.stumbleTicks > 0) p.stumbleTicks--;
 
   // frenzy timer
   if (p.frenzy) {
@@ -493,7 +512,8 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.animLock--;
   } else if (!p.grounded) {
     // Merle's flutter: the run cycle scrambled at panic speed, midair
-    p.anim = p.flutterTicks > 0 ? "runfast" : "jump";
+    // (a gassed-out stumble borrows the scramble: legs going everywhere)
+    p.anim = p.flutterTicks > 0 || p.stumbleTicks > 0 ? "runfast" : "jump";
   } else if (Math.abs(p.vx) > 0.4) {
     p.anim = "run";
   } else {
@@ -898,6 +918,7 @@ function stepPour(sim: Sim): void {
       // the moonshine draws 'em — and pours the courage to fight 'em
       pour.jarRetry = sim.tick;
       refillPourJars(sim);
+      for (const q of sim.players) refillWind(q); // a second wind for the second wave
       // the wave IS the pressure now; the revenuer clears out and waits.
       // Guarantee at least the push from here, but never pull the deadline
       // earlier than it already was (a fast wave-1 clear must not hurry it).
@@ -1020,6 +1041,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepJars(sim);
   stepPour(sim);
   stepShrine(sim);
+  stepCage(sim);
 
   // specials cadence (never on boss levels' final phase; still fun mid-boss)
   if (sim.tick >= sim.nextSpecialTick && sim.specials.length < 2) {
@@ -1049,6 +1071,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
         p.vy = 0;
         p.invuln = P_INVULN_TICKS;
         p.anim = "idle";
+        refillWind(p);
       } else {
         p.spectating = true;
       }

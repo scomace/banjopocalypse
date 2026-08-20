@@ -1,4 +1,5 @@
-// The jug-band audio engine. SFX are 100% synthesized WebAudio,
+// The jug-band audio engine. SFX are synthesized WebAudio (plus a few
+// sampled one-shots, see SAMPLE_SFX),
 // architecture in the spirit of accountingsurvivor's lib/sfx/synth.ts
 // (buffer-rendered hot sounds, one master bus).
 //
@@ -36,6 +37,21 @@ function midiToFreq(m: number): number {
   return 440 * Math.pow(2, (m - 69) / 12);
 }
 
+/**
+ * Sampled one-shots. To add one: drop an mp3/wav in public/sounds, add a
+ * line here, and play it from a playSfx case via this.playSample(name, ...).
+ * The engine fetches, peak-normalizes and trims each file at load. A missing
+ * or broken file is NOT an error: playSample returns false and the case
+ * falls back to synth, so the game sounds right before the recording lands.
+ *   gain: playback level (post-normalize)   cut: cap on played length, s
+ */
+const SAMPLE_SFX: Record<string, { file: string; gain?: number; cut?: number }> = {
+  /** gassed out: the hiccup that ate the double jump */
+  windFail: { file: "wind-fail.mp3", gain: 0.8 },
+  /** last pips of wind: the wheeze under the jump */
+  windStrain: { file: "wind-strain.mp3", gain: 0.5 },
+};
+
 export class JugBandAudio {
   private ctx: AudioContext | null = null;
   private master!: GainNode;
@@ -47,6 +63,8 @@ export class JugBandAudio {
   private burpBuf: AudioBuffer | null = null;
   private burpBufRev: AudioBuffer | null = null;
   private burpVoices: AudioBufferSourceNode[] = [];
+  /** SAMPLE_SFX buffers that loaded (name -> normalized, trimmed). */
+  private samples = new Map<string, AudioBuffer>();
   private lastBurpSemis = Infinity;
   private trackEl: HTMLAudioElement | null = null;
   private trackLevel = -1;
@@ -92,6 +110,7 @@ export class JugBandAudio {
       const data = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
       void this.loadBurp(ctx);
+      void this.loadSamples(ctx);
       return ctx;
     } catch {
       return null;
@@ -111,30 +130,35 @@ export class JugBandAudio {
     if (this.ctx) this.master.gain.value = m ? 0 : 1;
   }
 
-  // ------------------------------------------------------- the cute burp
-  // The engine's one sampled sound. Every bubble blow layers it under the
-  // synthesized hic, re-rolled per play so no two burps sound alike.
+  // ------------------------------------------------------- samples
+  // Sampled sounds: the cute burp (layered under every synthesized hic and
+  // re-rolled per play so no two burps sound alike) and the SAMPLE_SFX
+  // one-shots. All go through loadSampleBuffer: fetch, decode, normalize,
+  // trim the dead air.
 
-  private async loadBurp(ctx: AudioContext): Promise<void> {
+  /**
+   * Fetch + decode a sample from public/sounds, peak-normalize it to 0.9
+   * (so gain math downstream means what it says; recordings land at all
+   * levels) and trim leading/trailing silence (leading silence reads as
+   * input lag). Null if the file is missing or undecodable.
+   */
+  private async loadSampleBuffer(ctx: AudioContext, file: string): Promise<AudioBuffer | null> {
     try {
-      const res = await fetch(`${import.meta.env.BASE_URL}sounds/cuteburp.mp3`);
+      const res = await fetch(`${import.meta.env.BASE_URL}sounds/${file}`);
+      if (!res.ok) return null;
       const buf = await ctx.decodeAudioData(await res.arrayBuffer());
-      // the sample is mastered ~17dB quiet (peak 0.15): normalize to a 0.9
-      // peak once at load so the gain math in burp() means what it says
       let peak = 0;
       for (let ch = 0; ch < buf.numberOfChannels; ch++) {
         const d = buf.getChannelData(ch);
         for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
       }
       if (peak > 0.001) {
-        const s = 0.9 / peak;
+        const sc = 0.9 / peak;
         for (let ch = 0; ch < buf.numberOfChannels; ch++) {
           const d = buf.getChannelData(ch);
-          for (let i = 0; i < d.length; i++) d[i] *= s;
+          for (let i = 0; i < d.length; i++) d[i] *= sc;
         }
       }
-      // trim the dead air: the file opens with a breath of silence that
-      // reads as input lag, and the tail drags the burp out
       const d0 = buf.getChannelData(0);
       let start = 0;
       while (start < d0.length && Math.abs(d0[start]) < 0.02) start++;
@@ -146,18 +170,63 @@ export class JugBandAudio {
       for (let ch = 0; ch < buf.numberOfChannels; ch++) {
         trimmed.getChannelData(ch).set(buf.getChannelData(ch).subarray(start, end));
       }
-      this.burpBuf = trimmed;
-      // pre-render a reversed copy for the rare jackpot burp
-      const rev = ctx.createBuffer(trimmed.numberOfChannels, trimmed.length, trimmed.sampleRate);
-      for (let ch = 0; ch < trimmed.numberOfChannels; ch++) {
-        const src = trimmed.getChannelData(ch);
-        const dst = rev.getChannelData(ch);
-        for (let i = 0; i < src.length; i++) dst[i] = src[src.length - 1 - i];
-      }
-      this.burpBufRev = rev;
+      return trimmed;
     } catch {
-      // no burp asset: the synth hic carries on alone
+      return null;
     }
+  }
+
+  private async loadSamples(ctx: AudioContext): Promise<void> {
+    await Promise.all(
+      Object.entries(SAMPLE_SFX).map(async ([name, def]) => {
+        const buf = await this.loadSampleBuffer(ctx, def.file);
+        if (buf) this.samples.set(name, buf);
+      }),
+    );
+  }
+
+  /**
+   * Play a SAMPLE_SFX one-shot. False if it never loaded (caller plays its
+   * synth fallback). pitch is a playback-rate multiplier (also shortens).
+   */
+  private playSample(name: string, when: number, pitch = 1, pan = 0): boolean {
+    const ctx = this.ctx;
+    const buf = this.samples.get(name);
+    const def = SAMPLE_SFX[name];
+    if (!ctx || !buf || !def) return false;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.value = pitch;
+    const g = ctx.createGain();
+    const gain = def.gain ?? 0.7;
+    g.gain.setValueAtTime(gain, when);
+    const natural = buf.duration / pitch;
+    const len = def.cut ? Math.min(natural, def.cut) : natural;
+    // quick fade so a cut never clicks
+    g.gain.setValueAtTime(gain, Math.max(when, when + len - 0.03));
+    g.gain.linearRampToValueAtTime(0.0001, when + len);
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan)) * 0.6;
+    src.connect(g);
+    g.connect(panner);
+    panner.connect(this.sfxBus);
+    src.start(when);
+    src.stop(when + len + 0.02);
+    return true;
+  }
+
+  private async loadBurp(ctx: AudioContext): Promise<void> {
+    const trimmed = await this.loadSampleBuffer(ctx, "cuteburp.mp3");
+    if (!trimmed) return; // no burp asset: the synth hic carries on alone
+    this.burpBuf = trimmed;
+    // pre-render a reversed copy for the rare jackpot burp
+    const rev = ctx.createBuffer(trimmed.numberOfChannels, trimmed.length, trimmed.sampleRate);
+    for (let ch = 0; ch < trimmed.numberOfChannels; ch++) {
+      const src = trimmed.getChannelData(ch);
+      const dst = rev.getChannelData(ch);
+      for (let i = 0; i < src.length; i++) dst[i] = src[src.length - 1 - i];
+    }
+    this.burpBufRev = rev;
   }
 
   private burp(when: number, pan: number): void {
@@ -511,6 +580,30 @@ export class JugBandAudio {
         this.noise(t, 0.08, 3000, 1.2, 0.28);
         break;
       }
+      case "windStrain": {
+        // the last pips of wind: a thin wheeze under the jump (pitch rises
+        // as the meter empties). Sample if public/sounds/wind-strain.mp3
+        // exists, else a synth wheeze.
+        if (this.playSample("windStrain", t, pitch, pan)) break;
+        this.noise(t, 0.22, 1500 * pitch, 1.4, 0.09, "bandpass");
+        this.tone(t + 0.02, 0.18, 1100 * pitch, "sine", 0.035, { endFreq: 1500 * pitch, attack: 0.05 });
+        break;
+      }
+      case "windFail": {
+        // gassed out: the hiccup that ate the double jump. Sample if
+        // public/sounds/wind-fail.mp3 exists, else the game's own hic (the
+        // cute burp) plus a sad little sputter.
+        if (this.playSample("windFail", t, pitch, pan)) break;
+        this.burp(t, pan);
+        this.tone(t, 0.09, 520 * pitch, "square", 0.1, { endFreq: 260 * pitch, attack: 0.003 });
+        this.tone(t + 0.1, 0.28, 240 * pitch, "sawtooth", 0.12, {
+          endFreq: 110 * pitch,
+          vibratoHz: 9,
+          vibratoCents: 70,
+        });
+        this.noise(t + 0.08, 0.12, 900, 1.2, 0.06);
+        break;
+      }
       case "possum":
         this.tone(t, 0.12, 700, "square", 0.08, { endFreq: 1100 });
         break;
@@ -544,7 +637,13 @@ export class JugBandAudio {
         break;
       }
       case "cousinYell":
-        this.tone(t, 0.2, 300, "sawtooth", 0.14, { endFreq: 480 });
+        this.tone(t, 0.2, 300 * pitch, "sawtooth", 0.14, { endFreq: 480 * pitch });
+        break;
+      case "cousinBonk":
+        // skull meets wall: dull thud + a wobbly little daze tone
+        this.noise(t, 0.06, 500 * pitch, 1.2, 0.22);
+        this.tone(t, 0.08, 140 * pitch, "square", 0.18, { endFreq: 70 * pitch });
+        this.tone(t + 0.1, 0.22, 520 * pitch, "triangle", 0.07, { endFreq: 440 * pitch });
         break;
       case "houndBark": {
         this.tone(t, 0.1, 260, "sawtooth", 0.22, { endFreq: 170 });

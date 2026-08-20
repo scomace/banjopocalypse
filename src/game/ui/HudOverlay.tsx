@@ -1,9 +1,9 @@
-// HUD: score, lives, YEEHAW letters, frenzy bar. Updated imperatively at
+// HUD: score, lives, YEEHAW letters, wind pips, frenzy bar. Updated imperatively at
 // ~10Hz off a rAF loop reading controller state directly; React renders the
 // static skeleton once.
 
 import { useEffect, useRef } from "react";
-import { YEEHAW } from "../sim/constants";
+import { WIND_ENABLED, WIND_MAX, YEEHAW } from "../sim/constants";
 import { castById } from "../cast";
 import { weaponById } from "../sim/weapons";
 
@@ -21,8 +21,10 @@ type ControllerLike = {
     players: {
       index: number;
       frenzy: { weapon: string; ticksLeft: number } | null;
+      wind: number;
     }[];
     world: { name: string };
+    isBoss: boolean;
   };
 };
 
@@ -55,6 +57,21 @@ export function HudOverlay({ controller }: { controller: ControllerLike }) {
           el.style.opacity = pr.letters[li] ? "1" : "0.25";
         });
         const simP = controller.sim.players.find((p) => p.index === i);
+        // wind pips: lit = air specials in the tank; empty + gassed blinks red
+        const windEl = panel.querySelector<HTMLElement>("[data-wind]");
+        if (windEl) {
+          const show = WIND_ENABLED && !controller.sim.isBoss && !!simP;
+          windEl.style.display = show ? "flex" : "none";
+          if (show && simP) {
+            const gassed = simP.wind <= 0;
+            const blink = gassed && Math.floor(now / 180) % 2 === 0;
+            windEl.querySelectorAll<HTMLElement>("[data-windpip]").forEach((el, wi) => {
+              const lit = wi < simP.wind;
+              el.style.opacity = lit ? "1" : blink ? "0.7" : "0.3";
+              el.style.background = gassed ? "#ff6b6b" : "#8fe3ff";
+            });
+          }
+        }
         const fbar = panel.querySelector<HTMLElement>("[data-frenzy]");
         const fname = panel.querySelector<HTMLElement>("[data-frenzyname]");
         if (fbar && fname) {
@@ -98,6 +115,21 @@ export function HudOverlay({ controller }: { controller: ControllerLike }) {
               0
             </div>
             <div data-lives className="font-pixel text-[10px] text-[#ff6b6b]" style={{ textShadow: "1px 1px 0 #000" }} />
+            <div
+              data-wind
+              title="wind"
+              className={`mt-0.5 gap-[3px] ${i === 1 ? "justify-end" : ""}`}
+              style={{ display: "none" }}
+            >
+              {Array.from({ length: WIND_MAX }, (_, wi) => (
+                <span
+                  key={wi}
+                  data-windpip
+                  className="inline-block h-1.5 w-2.5 border border-black/70"
+                  style={{ background: "#8fe3ff", opacity: 1 }}
+                />
+              ))}
+            </div>
             <div className={`mt-0.5 flex gap-0.5 ${i === 1 ? "justify-end" : ""}`}>
               {YEEHAW.map((ch, li) => (
                 <span

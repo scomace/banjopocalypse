@@ -5,7 +5,7 @@
 // ?online=join&room=CODE (+&cast=) drives the lobby hands-free.
 
 import { useEffect, useRef, useState } from "react";
-import { CAST } from "../game/cast";
+import { CAST, castUnlocked } from "../game/cast";
 import { loadSave } from "../game/core/save";
 import { audio } from "../game/audio/engine";
 import { delayForRtt, RoomClient, type NetMsg, type NetSession } from "../game/net/client";
@@ -265,7 +265,8 @@ export function OnlineScreen({
           <CastCard
             key={m.id}
             member={m}
-            locked={save.worldsCleared < m.unlockWorlds}
+            locked={!castUnlocked(m, save)}
+            rescued={save.castRescued.includes(m.id)}
             selected={l.casts.map((c, i) => (c === m.id ? i : -1)).filter((i) => i >= 0)}
             onPick={() => pickCast(m.id)}
           />

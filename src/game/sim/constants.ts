@@ -65,6 +65,20 @@ export const GLIDE_AIR_CONTROL = 0.9;
 export const BOLT_VY = -9.2;
 export const BOLT_RADIUS = 95;
 export const BOLT_DMG = 3;
+// ---- wind: air-special stamina (see wind.ts) ----
+/** Kill switch: false makes every air special free again, no pips shown. */
+export const WIND_ENABLED = true;
+/** Pips of wind: free air specials before a press becomes a gamble. */
+export const WIND_MAX = 5;
+/** Grounded ticks per pip back (2s: land, catch your breath, go again). */
+export const WIND_REGEN_TICKS = 120;
+/** Gassed out: odds the press whiffs. Rolled once per airtime. */
+export const WIND_FAIL_CHANCE = 0.5;
+/** The whiff still hops this fraction of an honest double (rescue, not death). */
+export const WIND_STUMBLE_MULT = 0.35;
+export const WIND_STUMBLE_TICKS = 22; // leg-wobble anim
+/** At this many pips left (after the spend) the press starts to wheeze. */
+export const WIND_STRAIN_AT = 1;
 /**
  * Feet may rise one tile above the field, then you bonk the sky. Mirrors the
  * FIELD_H + 8 slack the bottom wrap allows. Without it a hook dismount can
@@ -166,3 +180,15 @@ export const YEEHAW_BONUS = 10000;
 export const EXTRA_LIFE_EVERY = 100000;
 
 export const YEEHAW = ["Y", "E", "E", "H", "A", "W"] as const;
+
+// ------------------------------------------------------------ rescue cages
+/** Cage box (feet-anchored like everything else): the 26x36 rigs at x2. */
+export const CAGE_W = 52;
+export const CAGE_H = 72;
+/** Caged cousin calls out: first after this many ticks of play, then every interval. */
+export const CAGE_HOLLER_FIRST = 150;
+export const CAGE_HOLLER_EVERY = 540;
+/** Padlock hits to pop a cage. */
+export const CAGE_HITS = 3;
+/** Ticks between hits so one shoulder-check is one hit, not six. */
+export const CAGE_HIT_COOLDOWN = 28;
