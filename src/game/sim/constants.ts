@@ -64,6 +64,14 @@ export const PVP_BOUNCE_LAUNCH_TICKS = 20; // rise immune to the jump-release cu
 export const PVP_SQUASH_TICKS = 30; // the landed-on player's knees buckle
 export const PVP_SQUASH_JUMP_MULT = 0.45; // squashed jump strength
 
+// --- player-vs-player grapple fling ---
+/** Kill switch: the Fishin' Line snags yer partner too — a friendly, no-
+ *  damage yank toward the caster. Flip to false to remove wholesale. */
+export const PVP_FLING = true;
+export const PVP_FLING_VX = 6.0; // launched toward the caster
+export const PVP_FLING_VY = -7.5;
+export const PVP_FLING_LAUNCH_TICKS = 22; // rise immune to the jump-release cut
+
 // --- bubbles ---
 export const BUBBLE_R = 15;
 export const BUBBLE_LAUNCH_SPEED = 5.2;

@@ -30,6 +30,10 @@ import {
   HOOK_YANK,
   P_HEIGHT,
   P_WIDTH,
+  PVP_FLING,
+  PVP_FLING_LAUNCH_TICKS,
+  PVP_FLING_VX,
+  PVP_FLING_VY,
 } from "./constants";
 import { circleOverlapsBox, moveBody, tileAt } from "./physics";
 import type { Enemy, PlayerState, Sim } from "./types";
@@ -152,6 +156,27 @@ export function flingEnemy(
   emit(sim, { t: "sfx", name: "fling", pitch: 0.9 + sim.rng() * 0.25 });
 }
 
+// The whole PVP grapple-fling is this function + its one PVP_FLING call
+// site in the fly phase below; the constants.ts flag removes it wholesale.
+// A friendly yank, no damage: the snagged partner arcs toward the caster,
+// rise uncut, boots primed to bowl varmints on the way over.
+function flingPartner(sim: Sim, p: PlayerState, q: PlayerState, hx: number, hy: number): void {
+  const dir = Math.sign(p.x - q.x) || 1;
+  q.vx = dir * PVP_FLING_VX;
+  q.vy = PVP_FLING_VY;
+  q.grounded = false;
+  q.coyote = 0;
+  q.pvpLaunch = PVP_FLING_LAUNCH_TICKS;
+  q.hookKick = LAUNCH_GRACE;
+  if (q.hook && q.hook.kind === "hold") {
+    q.hook = { kind: "retract", x: q.hook.ax, y: q.hook.ay };
+  }
+  p.hook = { kind: "retract", x: hx, y: hy };
+  p.hookCooldown = HOOK_COOLDOWN;
+  emit(sim, { t: "sfx", name: "fling", pitch: 1.15 });
+  emit(sim, { t: "burst", text: "HEAVE!", x: q.x, y: q.y - P_HEIGHT - 12 });
+}
+
 /** The cast / fly / retract / swing-control half. Runs at the top of stepPlayer. */
 export function stepHookControl(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): void {
   if (p.hookCooldown > 0) p.hookCooldown--;
@@ -182,6 +207,16 @@ export function stepHookControl(sim: Sim, p: PlayerState, cmd: number, prevCmd: 
           emit(sim, { t: "balloon", player: p.index, trigger: "hook" });
         }
         return;
+      }
+    }
+    // snag yer partner (kill switch: PVP_FLING in constants)
+    if (PVP_FLING) {
+      for (const q of sim.players) {
+        if (q === p || !q.alive || q.ghost || q.spectating) continue;
+        if (circleOverlapsBox(h.x, h.y, 12, q.x, q.y, P_WIDTH + 6, P_HEIGHT)) {
+          flingPartner(sim, p, q, h.x, h.y);
+          return;
+        }
       }
     }
     // the boss takes a jab but can't be reeled

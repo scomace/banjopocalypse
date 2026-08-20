@@ -21,7 +21,7 @@ import { WEAPONS } from "../src/game/sim/weapons";
 import { CAST } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
-import { P_HEIGHT, PVP_BOUNCE, PVP_BOUNCE_VY } from "../src/game/sim/constants";
+import { P_HEIGHT, PVP_BOUNCE, PVP_BOUNCE_VY, PVP_FLING, HOOK_SPEED } from "../src/game/sim/constants";
 import type { ShrineGift } from "../src/game/sim/types";
 import {
   MAX_WEAPONS,
@@ -524,6 +524,48 @@ console.log("[11] co-op ghost rules");
   if (a.livesLeft !== 2 || b.livesLeft !== 2) fail(`party wipe should charge one life each (${a.livesLeft}, ${b.livesLeft})`);
   if (a.invuln <= 0 || b.invuln <= 0) fail("regenerated players should get mercy invuln");
   console.log("    ghost rules ok");
+}
+
+// ---- 12. PVP grapple fling ----
+console.log("[12] pvp grapple fling");
+if (PVP_FLING) {
+  const sim = createSim({
+    seed: 9,
+    levelDef: getLevelDef(1),
+    world: worldForLevel(1),
+    levelIndex: 1,
+    isBoss: false,
+    players: [
+      { castId: "earl", loadout: { weapons: [{ id: "twang", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+      { castId: "buford", loadout: { weapons: [{ id: "washboard", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+    ],
+    deathless: false,
+    shrine: null,
+  });
+  const [a, b] = sim.players;
+  a.x = 300;
+  b.x = 480;
+  for (let t = 0; t < 220 && !(a.grounded && b.grounded); t++) {
+    a.invuln = 60;
+    b.invuln = 60;
+    step(sim, [0, 0], [0, 0]);
+  }
+  // park the varmints far away so the hook meets earl, not a wanderer
+  for (const e of sim.enemies) {
+    e.x = 60;
+    e.y = 60;
+  }
+  // put buford's flying hook right on earl
+  b.hook = { kind: "fly", x: a.x, y: a.y - 20, vx: HOOK_SPEED, vy: 0, tx: null, ty: null, dist: 0 };
+  step(sim, [0, 0], [0, 0]);
+  if (a.vx <= 3) fail(`fling should launch earl toward buford (vx ${a.vx.toFixed(1)})`);
+  if (a.vy > -5) fail(`fling should arc earl upward (vy ${a.vy.toFixed(1)})`);
+  if (a.pvpLaunch <= 0) fail("flung partner should get launch grace");
+  if (a.livesLeft !== 3 || a.alive !== true) fail("fling must not damage the partner");
+  if (!b.hook || b.hook.kind !== "retract") fail("caster's hook should retract after the snag");
+  console.log("    grapple fling ok");
+} else {
+  console.log("    PVP_FLING is off; skipped");
 }
 
 // ---- 6. cast sanity ----

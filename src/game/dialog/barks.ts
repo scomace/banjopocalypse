@@ -12,7 +12,7 @@ type BarkPool = Record<string, string[]>;
 
 const SHARED: BarkPool = {
   levelIntro: [
-    "Y'all smell that? Smells like winnin'.",
+    "Y'all smell that? Smells like cousin Peggy Sue's parfume...",
     "Another county, same varmints.",
     "Hold my jug. Watch this.",
     "This here's family business.",
