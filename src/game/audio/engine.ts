@@ -133,11 +133,24 @@ export class JugBandAudio {
           for (let i = 0; i < d.length; i++) d[i] *= s;
         }
       }
-      this.burpBuf = buf;
-      // pre-render a reversed copy for the rare jackpot burp
-      const rev = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+      // trim the dead air: the file opens with a breath of silence that
+      // reads as input lag, and the tail drags the burp out
+      const d0 = buf.getChannelData(0);
+      let start = 0;
+      while (start < d0.length && Math.abs(d0[start]) < 0.02) start++;
+      start = Math.max(0, start - Math.floor(buf.sampleRate * 0.002));
+      let end = d0.length - 1;
+      while (end > start && Math.abs(d0[end]) < 0.02) end--;
+      end = Math.min(d0.length, end + Math.floor(buf.sampleRate * 0.015));
+      const trimmed = ctx.createBuffer(buf.numberOfChannels, Math.max(1, end - start), buf.sampleRate);
       for (let ch = 0; ch < buf.numberOfChannels; ch++) {
-        const src = buf.getChannelData(ch);
+        trimmed.getChannelData(ch).set(buf.getChannelData(ch).subarray(start, end));
+      }
+      this.burpBuf = trimmed;
+      // pre-render a reversed copy for the rare jackpot burp
+      const rev = ctx.createBuffer(trimmed.numberOfChannels, trimmed.length, trimmed.sampleRate);
+      for (let ch = 0; ch < trimmed.numberOfChannels; ch++) {
+        const src = trimmed.getChannelData(ch);
         const dst = rev.getChannelData(ch);
         for (let i = 0; i < src.length; i++) dst[i] = src[src.length - 1 - i];
       }
@@ -153,13 +166,16 @@ export class JugBandAudio {
     const buf = reversed ? this.burpBufRev : this.burpBuf;
     if (!ctx || !buf) return;
 
-    // one rate knob for pitch+length, rolled in semitones so up- and
-    // down-shifts are equally likely; re-roll once if too close to last play
-    let semis = -6 + Math.random() * 14;
-    if (Math.abs(semis - this.lastBurpSemis) < 1) semis = -6 + Math.random() * 14;
+    // one rate knob for pitch+length, rolled in semitones around the
+    // original: some deeper, some slightly higher, centered near 0.
+    // Re-roll once if too close to the last play.
+    let semis = -3 + Math.random() * 7;
+    if (Math.abs(semis - this.lastBurpSemis) < 1) semis = -3 + Math.random() * 7;
     this.lastBurpSemis = semis;
     const rate = Math.pow(2, semis / 12);
     const dur = buf.duration / rate;
+    // keep it a snappy little urp: only the front of the sample escapes
+    const len = Math.min(dur, 0.13 + Math.random() * 0.11);
 
     // voice cap: steal the oldest so bubble spam doesn't wall up
     while (this.burpVoices.length >= 4) {
@@ -173,15 +189,16 @@ export class JugBandAudio {
     const src = ctx.createBufferSource();
     src.buffer = buf;
     src.playbackRate.setValueAtTime(rate, when);
-    // drooping burp: sag 10-18% over the tail
+    // drooping burp: a gentle sag over the tail
     if (Math.random() < 0.4) {
-      src.playbackRate.linearRampToValueAtTime(rate * (0.82 + Math.random() * 0.08), when + dur);
+      src.playbackRate.linearRampToValueAtTime(rate * (0.9 + Math.random() * 0.05), when + len);
     }
 
-    // dark vs bright reads as a different burp entirely (log-random cutoff)
+    // dark vs bright reads as a different burp (log-random cutoff, floor
+    // high enough that a dark roll doesn't read as pitched-down)
     const lp = ctx.createBiquadFilter();
     lp.type = "lowpass";
-    lp.frequency.value = 1200 * Math.pow(8000 / 1200, Math.random());
+    lp.frequency.value = 2600 * Math.pow(9500 / 2600, Math.random());
 
     const g = ctx.createGain();
     const gain = 0.55 * (0.7 + Math.random() * 0.3); // downward-only volume roll
@@ -195,15 +212,11 @@ export class JugBandAudio {
     g.connect(panner);
     panner.connect(this.sfxBus);
 
-    // trimmed burp: sometimes only the first 60-85% escapes
-    // (slack for the droop case, where the sagging rate stretches the tail)
-    let stopAt = when + dur * 1.25 + 0.02;
-    if (Math.random() < 0.3) {
-      const cut = when + dur * (0.6 + Math.random() * 0.25);
-      g.gain.setValueAtTime(gain, cut - 0.04);
-      g.gain.linearRampToValueAtTime(0.0001, cut);
-      stopAt = cut + 0.02;
-    }
+    // always cut at `len` with a quick fade so every burp stays snappy
+    const cut = when + len;
+    g.gain.setValueAtTime(gain, Math.max(when, cut - 0.045));
+    g.gain.linearRampToValueAtTime(0.0001, cut);
+    const stopAt = cut + 0.02;
 
     // occasional holler slapback: one 120ms echo, not a hall
     if (Math.random() < 0.18) {
