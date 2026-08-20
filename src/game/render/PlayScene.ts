@@ -6,7 +6,7 @@
 import Phaser from "phaser";
 import type { BakedCharacter } from "../../aachar/baker";
 import { CMD_JUMP } from "../core/input";
-import type { InputSampler } from "../core/input";
+import type { InputSource } from "../core/inputsource";
 import {
   BUBBLE_R,
   FIELD_H,
@@ -18,7 +18,7 @@ import {
   YEEHAW,
 } from "../sim/constants";
 import { T_PLATFORM, T_SOLID, T_SPIKES } from "../levels/types";
-import type { FxEvent, Sim } from "../sim/types";
+import type { FxEvent, Sim, SimInputs } from "../sim/types";
 import { step } from "../sim/sim";
 import { FOOD_TIERS } from "../sim/items";
 import {
@@ -40,11 +40,13 @@ import { RELIC_ICONS, SPR_PEDESTAL, WEAPON_ICONS, giftIcon } from "./sprites-wea
 import { pedestalX } from "../sim/shrine";
 
 export type PlaySceneHooks = {
-  sampler: InputSampler;
+  /** where this tick's commands come from: keyboard, replay log, or network */
+  source: InputSource;
   getSim: () => Sim;
   /** called once per sim tick after stepping, with drained fx */
   onFx: (events: FxEvent[]) => void;
-  onTick: () => void;
+  /** called once per sim tick after stepping, with the inputs that drove it */
+  onTick: (inputs: SimInputs) => void;
   paused: () => boolean;
 };
 
@@ -52,7 +54,7 @@ export class PlayScene extends Phaser.Scene {
   private hooks!: PlaySceneHooks;
   private baked!: Map<string, BakedCharacter>;
   private accumulator = 0;
-  private prevInputs: [number, number] = [0, 0];
+  private prevInputs: SimInputs = [0, 0];
   private tilesDrawn = false;
   private tileGroup: Phaser.GameObjects.Image[] = [];
   private sprites = new Map<string, Phaser.GameObjects.Sprite | Phaser.GameObjects.Image>();
@@ -138,20 +140,30 @@ export class PlayScene extends Phaser.Scene {
     }
   }
 
+  private lastSim: Sim | null = null;
+
   update(_time: number, delta: number): void {
     if (this.hooks.paused()) return;
     this.accumulator += Math.min(delta, 100);
     const sim = this.hooks.getSim();
+    if (sim !== this.lastSim) {
+      // fresh level: held buttons must re-edge, same as a replay's tick 0
+      this.lastSim = sim;
+      this.prevInputs = [0, 0];
+    }
     while (this.accumulator >= TICK_MS) {
       this.accumulator -= TICK_MS;
-      const inputs: [number, number] = [
-        this.hooks.sampler.sample(0),
-        this.hooks.sampler.sample(1),
-      ];
+      const inputs = this.hooks.source.poll(sim.tick);
+      if (!inputs) {
+        // stalled (remote input not here yet / replay over): hold the sim
+        // and drop banked time so it doesn't burst-step when unstalled
+        this.accumulator = 0;
+        break;
+      }
       step(sim, inputs, this.prevInputs);
       this.prevInputs = inputs;
       if (sim.fx.length) this.hooks.onFx(sim.fx);
-      this.hooks.onTick();
+      this.hooks.onTick(inputs);
     }
     this.drawLevel();
     this.render_(sim);

@@ -22,6 +22,7 @@ import { CAST } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
 import { P_HEIGHT, PVP_BOUNCE, PVP_BOUNCE_VY, PVP_FLING, HOOK_SPEED } from "../src/game/sim/constants";
+import { ReplayRecorder, verifyReplay } from "../src/game/replay";
 import type { ShrineGift } from "../src/game/sim/types";
 import {
   MAX_WEAPONS,
@@ -566,6 +567,52 @@ if (PVP_FLING) {
   console.log("    grapple fling ok");
 } else {
   console.log("    PVP_FLING is off; skipped");
+}
+
+// ---- 13. replay: record a level, verify tick-perfect playback ----
+console.log("[13] replay record + verify");
+{
+  const cfg = {
+    seed: 90210,
+    levelDef: getLevelDef(7),
+    world: worldForLevel(7),
+    levelIndex: 7,
+    isBoss: false,
+    players: [
+      { castId: "earl", loadout: { weapons: [{ id: "twang", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+      { castId: "buford", loadout: { weapons: [{ id: "washboard", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+    ],
+    deathless: false,
+    shrine: null,
+  };
+  const rec = new ReplayRecorder(cfg);
+  const sim = createSim(cfg);
+  const rng = mulberry32(808);
+  let prev: number[] = [0, 0];
+  for (let t = 0; t < 1200; t++) {
+    const cmd = () =>
+      (rng() < 0.4 ? 1 : 0) | (rng() < 0.4 ? 2 : 0) | (rng() < 0.3 ? 4 : 0) | (rng() < 0.3 ? 8 : 0) | (rng() < 0.04 ? 16 : 0);
+    const inputs = [cmd(), cmd()];
+    step(sim, inputs, prev);
+    rec.record(inputs);
+    prev = inputs;
+  }
+  const rep = rec.finish(sim);
+  const v = verifyReplay(rep);
+  if (!v.ok) fail(`replay did not verify (hash ${v.hash} vs ${rep.endHash}, tick ${v.tick} vs ${rep.endTick})`);
+  // a corrupted hash must be caught
+  const goodHash = rep.endHash;
+  rep.endHash ^= 0xdeadbeef;
+  if (verifyReplay(rep).ok) fail("corrupted end hash still verified");
+  rep.endHash = goodHash;
+  // a tampered log must be caught. The tamper must provably matter: a lone
+  // bit flip can be swallowed (dead/ghost ticks ignore inputs, blow cooldown
+  // eats presses), so clear an idle window right after the intro and inject
+  // a fresh blow — a bubble the original run never had.
+  for (let t = 60; t < 96; t++) rep.log[t][0] = 0;
+  rep.log[96][0] = 8;
+  if (verifyReplay(rep).ok) fail("tampered replay still verified");
+  console.log("    record/verify ok (tamper caught)");
 }
 
 // ---- 6. cast sanity ----

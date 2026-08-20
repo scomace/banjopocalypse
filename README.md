@@ -35,6 +35,8 @@ load (`src/aachar/baker.ts`).
 - `?quickstart=1&cast=earl&level=12&seed=5` jump straight into a run
 - `npx tsx scripts/sim-smoke.mts` headless sim torture test
 - `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)
+- every level is input-recorded; in the browser console `__banjo.verifyLastReplay()` re-runs the last finished level headless and confirms the tick-perfect hash (`__banjo.verifyReplayNow()` mid-level; `__banjo.lastReplay` is the `{config, log}` itself)
+- `node scripts/qa-replay.mjs` browser E2E: real keyboard play, then the page re-simulates its own input log and must hash-match (needs `vite --port 5200`)
 - in a quickstart run: `0` clears the level, `9` forces a frenzy, `8` claims the shrine
 
 ## Ship

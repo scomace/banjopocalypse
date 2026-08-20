@@ -8,12 +8,14 @@ import type Phaser from "phaser";
 import { bakeCast, type BakedCharacter } from "../aachar/baker";
 import { castById } from "./cast";
 import { DEFAULT_BINDINGS, InputSampler, SOLO_BINDINGS } from "./core/input";
+import { LocalInputSource } from "./core/inputsource";
+import { ReplayRecorder, saveLastReplay, verifyReplay, type LevelReplay } from "./replay";
 import { getLevelDef } from "./levels";
 import { isBossLevel, worldForLevel } from "./levels/worlds";
 import { deriveSeed } from "./core/rng";
 import { createSim, type SimConfig } from "./sim/sim";
 import { takeShrine } from "./sim/shrine";
-import type { FxEvent, ShrineGift, Sim } from "./sim/types";
+import type { FxEvent, ShrineGift, Sim, SimInputs } from "./sim/types";
 import { LEVEL_CLEAR_TICKS } from "./sim/constants";
 import {
   addScore,
@@ -60,6 +62,9 @@ class RunController {
   private clearedHandled = false;
   /** Sim is frozen mid-level for a reveal (set synchronously — React lags a frame). */
   held = false;
+  private recorder!: ReplayRecorder;
+  /** The finished input log of the last completed level. */
+  lastReplay: LevelReplay | null = null;
 
   constructor(castIds: (string | null)[], startLevel: number, seed: number) {
     this.run = newRun(seed, startLevel, castIds);
@@ -85,9 +90,27 @@ class RunController {
     };
     this.clearedHandled = false;
     this.held = false;
+    // the recorder deep-copies the config now, before play mutates loadouts
+    this.recorder = new ReplayRecorder(cfg);
     // Jar o' Lightnin' is one level only; the sim has its copy now
     for (const pr of this.run.players) if (pr) pr.headStart = false;
     return createSim(cfg);
+  }
+
+  /** Called by the scene with the inputs that drove each tick. */
+  recordTick(inputs: SimInputs): void {
+    this.recorder.record(inputs);
+  }
+
+  /** Re-run the last completed level's log headless; true = tick-perfect. */
+  verifyLastReplay(): { ok: boolean; hash: number; tick: number } | null {
+    return this.lastReplay ? verifyReplay(this.lastReplay) : null;
+  }
+
+  /** Verify the in-progress level's log right now (dev/QA; fails after a
+   *  dev cheat, which mutates the sim outside the input stream — as it must). */
+  verifyReplayNow(): { ok: boolean; hash: number; tick: number } {
+    return verifyReplay(this.recorder.finish(this.sim));
   }
 
   /** Called once per sim tick by the scene. */
@@ -134,9 +157,13 @@ class RunController {
       !this.clearedHandled
     ) {
       this.clearedHandled = true;
+      this.lastReplay = this.recorder.finish(sim);
+      saveLastReplay(this.lastReplay);
       this.advance();
     } else if (sim.status === "allDead" && !this.clearedHandled) {
       this.clearedHandled = true;
+      this.lastReplay = this.recorder.finish(sim);
+      saveLastReplay(this.lastReplay);
       if (this.run.continuesLeft > 0) this.onFlow({ kind: "continue" });
       else this.onFlow({ kind: "gameover", won: false });
     }
@@ -255,7 +282,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     const game = createPhaserGame(
       containerRef.current,
       {
-        sampler,
+        source: new LocalInputSource(sampler),
         getSim: () => controller.sim,
         onFx: (events) => {
           audio.handleFx(events);
@@ -267,7 +294,8 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
             }
           }
         },
-        onTick: () => {
+        onTick: (inputs) => {
+          controller.recordTick(inputs);
           controller.tick();
           audio.tickMusic(controller.sim);
         },
