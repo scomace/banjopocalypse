@@ -26,15 +26,21 @@ const KEEPALIVE_MS = 25_000;
 
 export class RoomClient {
   readonly welcome: Welcome;
-  private ws: WebSocket;
+  private ws!: WebSocket;
   private handlers = new Set<(m: NetMsg) => void>();
-  private keepalive: number;
+  private keepalive = 0;
   /** Fires when the socket drops for any reason (server gone, network cut). */
   onClosed: (reason: string) => void = () => {};
 
   private constructor(ws: WebSocket, welcome: Welcome) {
-    this.ws = ws;
     this.welcome = welcome;
+    this.attach(ws);
+  }
+
+  /** Wire up a (possibly fresh) socket: message fanout, close, keepalive. */
+  private attach(ws: WebSocket): void {
+    window.clearInterval(this.keepalive);
+    this.ws = ws;
     ws.addEventListener("message", (e) => {
       let msg: NetMsg;
       try {
@@ -46,6 +52,7 @@ export class RoomClient {
       for (const h of this.handlers) h(msg);
     });
     ws.addEventListener("close", (e) => {
+      if (this.ws !== ws) return; // an old socket we already replaced
       window.clearInterval(this.keepalive);
       this.onClosed(e.reason || "connection lost");
     });
@@ -54,15 +61,35 @@ export class RoomClient {
     }, KEEPALIVE_MS);
   }
 
-  static host(): Promise<RoomClient> {
-    return RoomClient.connect(`${netBase()}/ws/new`);
+  static async host(): Promise<RoomClient> {
+    const { ws, welcome } = await RoomClient.connect(`${netBase()}/ws/new`);
+    return new RoomClient(ws, welcome);
   }
 
-  static join(code: string): Promise<RoomClient> {
-    return RoomClient.connect(`${netBase()}/ws/join/${code.toUpperCase()}`);
+  static async join(code: string): Promise<RoomClient> {
+    const { ws, welcome } = await RoomClient.connect(`${netBase()}/ws/join/${code.toUpperCase()}`);
+    return new RoomClient(ws, welcome);
   }
 
-  private static connect(url: string): Promise<RoomClient> {
+  /** Rejoin the same room in place after a drop: same code, same slot, all
+   *  subscribers intact. Throws if the room is gone or our slot got taken. */
+  async reconnect(): Promise<void> {
+    const { ws, welcome } = await RoomClient.connect(
+      `${netBase()}/ws/join/${this.welcome.code}`,
+    );
+    if (welcome.idx !== this.welcome.idx) {
+      ws.close();
+      throw new Error("our slot got taken");
+    }
+    this.attach(ws);
+  }
+
+  /** QA only: yank the socket so the reconnect path can be exercised. */
+  debugDropSocket(): void {
+    this.ws.close();
+  }
+
+  private static connect(url: string): Promise<{ ws: WebSocket; welcome: Welcome }> {
     return new Promise((resolve, reject) => {
       const ws = new WebSocket(url);
       const fail = (why: string) => reject(new Error(why));
@@ -71,7 +98,7 @@ export class RoomClient {
           const msg = JSON.parse(e.data as string) as Welcome;
           if (msg.t === "welcome") {
             ws.removeEventListener("message", onFirst);
-            resolve(new RoomClient(ws, msg));
+            resolve({ ws, welcome: msg });
             return;
           }
         } catch {

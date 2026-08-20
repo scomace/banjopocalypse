@@ -21,12 +21,16 @@ export class NetworkInputSource implements InputSource {
   private seq = 0;
   private bufs: Map<number, number>[];
   private lastSampled = -1;
+  private lastReleased = -1;
   private pending: NetMsg[] = [];
   private localHashes = new Map<number, number>();
   private remoteHashes = new Map<number, number>();
+  private stalledSince: number | null = null;
   /** first tick where local and remote state hashes disagreed, else null */
   desyncAt: number | null = null;
   onDesync: (tick: number) => void = () => {};
+  /** the peer told us they can't refill our gap — the session is unrecoverable */
+  onResumeDead: () => void = () => {};
   private unsub: () => void;
 
   constructor(
@@ -41,11 +45,19 @@ export class NetworkInputSource implements InputSource {
   }
 
   private onMessage(m: NetMsg): void {
-    if (m.t !== "input" && m.t !== "hash") return;
+    if (m.t === "resumeDead") {
+      this.onResumeDead();
+      return;
+    }
+    if (m.t !== "input" && m.t !== "hash" && m.t !== "resume") return;
     const seq = (m.seq as number) ?? 0;
     if (seq === this.seq) this.apply(m);
     else if (seq > this.seq) this.pending.push(m); // peer is a level ahead
-    // seq < this.seq: leftovers from a finished level, drop
+    else if (m.t === "resume") {
+      // they're stuck a level behind us; our old-level inputs are gone
+      this.client.send({ t: "resumeDead" });
+    }
+    // other seq < this.seq messages: leftovers from a finished level, drop
   }
 
   private apply(m: NetMsg): void {
@@ -54,7 +66,24 @@ export class NetworkInputSource implements InputSource {
     } else if (m.t === "hash" && typeof m.tick === "number") {
       this.remoteHashes.set(m.tick, m.hash as number);
       this.compareHashes(m.tick);
+    } else if (m.t === "resume") {
+      // refill the gap from our send buffer: everything they haven't seen
+      const need = (m.need as number) ?? 0;
+      for (const [tick, cmd] of this.bufs[this.myIdx]) {
+        if (tick >= need) this.client.send({ t: "input", seq: this.seq, tick, cmd });
+      }
     }
+  }
+
+  /** After a reconnect (ours or the peer's): ask the peer to resend every
+   *  input we're missing. Both sides doing this refills both directions. */
+  requestResume(): void {
+    this.client.send({ t: "resume", seq: this.seq, need: this.lastReleased + 1 });
+  }
+
+  /** How long poll() has been stalled waiting on the peer, in ms. */
+  stalledMs(): number {
+    return this.stalledSince === null ? 0 : performance.now() - this.stalledSince;
   }
 
   /** Call on every sim swap (next level, continue), with a counter bumped
@@ -63,6 +92,8 @@ export class NetworkInputSource implements InputSource {
   newLevel(seq: number): void {
     this.seq = seq;
     this.lastSampled = -1;
+    this.lastReleased = -1;
+    this.stalledSince = null;
     for (const b of this.bufs) b.clear();
     this.localHashes.clear();
     this.remoteHashes.clear();
@@ -83,9 +114,14 @@ export class NetworkInputSource implements InputSource {
     const out: number[] = [];
     for (const buf of this.bufs) {
       const cmd = buf.get(tick) ?? (tick < this.delay ? 0 : undefined);
-      if (cmd === undefined) return null; // stall: peer's tick not here yet
+      if (cmd === undefined) {
+        if (this.stalledSince === null) this.stalledSince = performance.now();
+        return null; // stall: peer's tick not here yet
+      }
       out.push(cmd);
     }
+    this.stalledSince = null;
+    this.lastReleased = tick;
     if (tick % 300 === 0) this.prune(tick);
     return out;
   }

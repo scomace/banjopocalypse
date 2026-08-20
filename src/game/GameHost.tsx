@@ -250,7 +250,13 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
   const netPicksRef = useRef<(Card | null)[]>([null, null]);
   const [, bumpNetPicks] = useState(0);
   const [desyncTick, setDesyncTick] = useState<number | null>(null);
+  /** fatal: the session cannot continue (desynced past repair, room gone) */
   const [partnerGone, setPartnerGone] = useState<string | null>(null);
+  /** temporary: somebody dropped and we're holding the line */
+  const [netTrouble, setNetTrouble] = useState<string | null>(null);
+  const [stalled, setStalled] = useState(false);
+  const [pingMs, setPingMs] = useState<number | null>(null);
+  const reconnecting = useRef(false);
 
   const controller = useMemo(
     () => new RunController(castIds, startLevel, seed),
@@ -314,6 +320,7 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
       netSourceRef.current = ns;
       // QA observability
       (window as unknown as { __banjoNet?: unknown }).__banjoNet = ns;
+      (window as unknown as { __banjoClient?: unknown }).__banjoClient = net.client;
       source = ns;
     } else {
       source = new LocalInputSource(sampler);
@@ -351,6 +358,7 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
     setReady(true);
     setIntroKey(1);
     return () => {
+      audio.stopMusic();
       game.destroy(true);
       gameRef.current = null;
       sampler.destroy();
@@ -360,9 +368,16 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baked]);
 
-  // online: remote card picks, host's continue, partner presence
+  // online: remote card picks, host's continue, partner presence + recovery
   useEffect(() => {
     if (!net) return;
+    let disposed = false;
+
+    const resendMyPick = () => {
+      const mine = netPicksRef.current[net.myIdx];
+      if (mine) net.client.send({ t: "card", player: net.myIdx, card: mine });
+    };
+
     const un = net.client.on((m) => {
       if (m.t === "card" && typeof m.player === "number" && m.player !== net.myIdx) {
         if (!netPicksRef.current[m.player]) {
@@ -373,13 +388,60 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
       } else if (m.t === "continue") {
         doContinue();
       } else if (m.t === "peer" && m.event === "leave") {
-        setPartnerGone("yer partner headed home");
+        setNetTrouble("partner dropped — holdin' the line");
+      } else if (m.t === "peer" && m.event === "join") {
+        // they're back: refill both input directions, re-offer my card pick
+        setNetTrouble(null);
+        netSourceRef.current?.requestResume();
+        resendMyPick();
       }
     });
-    net.client.onClosed = (reason) => setPartnerGone(reason || "connection lost");
-    return un;
+
+    // my own socket dropped: quietly try to slip back into the same slot
+    net.client.onClosed = () => {
+      if (disposed || reconnecting.current) return;
+      reconnecting.current = true;
+      setNetTrouble("lost the connection — tryin' to get back");
+      void (async () => {
+        for (let i = 0; i < 10 && !disposed; i++) {
+          await new Promise((r) => setTimeout(r, 1200 + i * 400));
+          try {
+            await net.client.reconnect();
+            reconnecting.current = false;
+            setNetTrouble(null);
+            netSourceRef.current?.requestResume();
+            resendMyPick();
+            return;
+          } catch {
+            // room may still be there; keep knocking
+          }
+        }
+        reconnecting.current = false;
+        if (!disposed) setPartnerGone("couldn't get back to the room");
+      })();
+    };
+
+    if (netSourceRef.current) {
+      netSourceRef.current.onResumeDead = () =>
+        setPartnerGone("y'all drifted apart — start a fresh room");
+    }
+
+    // stall indicator + ping readout
+    const iv = setInterval(() => {
+      setStalled((netSourceRef.current?.stalledMs() ?? 0) > 900);
+    }, 400);
+    const pingIv = setInterval(() => {
+      void net.client.rtt(1).then((ms) => setPingMs(ms));
+    }, 5000);
+
+    return () => {
+      disposed = true;
+      clearInterval(iv);
+      clearInterval(pingIv);
+      un();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [net]);
+  }, [net, ready]);
 
   // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
   // cheats mutate the sim outside the input stream, so they are HARD OFF online
@@ -480,6 +542,32 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
         {desyncTick !== null && (
           <div className="absolute left-0 right-0 top-0 z-50 bg-[#B93A20] py-1 text-center font-pixel text-[9px] text-white">
             OUT OF SYNC AT TICK {desyncTick} — Y'ALL ARE PLAYIN' DIFFERENT GAMES. RESTART THE ROOM.
+          </div>
+        )}
+        {net && pingMs !== null && (
+          <div className="absolute bottom-1 right-2 z-40 font-pixel text-[7px] text-white/35">
+            PING {pingMs}MS · DELAY {net.delay}
+          </div>
+        )}
+        {net && stalled && !netTrouble && !partnerGone && flow.kind === "playing" && !paused && (
+          <div className="absolute bottom-6 left-0 right-0 z-40 text-center font-pixel text-[9px] text-white/70">
+            WAITIN' ON YER PARTNER...
+          </div>
+        )}
+        {netTrouble && !partnerGone && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/75">
+            <div className="font-display text-3xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
+              Hold yer horses
+            </div>
+            <div className="font-pixel text-[9px] text-white/70">{netTrouble.toUpperCase()}...</div>
+            <button
+              className="font-pixel text-[9px] text-white/40 hover:text-white"
+              onClick={() =>
+                onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
+              }
+            >
+              GIVE UP AND HEAD HOME
+            </button>
           </div>
         )}
         {partnerGone && flow.kind !== "gameover" && flow.kind !== "victory" && (

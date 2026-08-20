@@ -41,6 +41,8 @@ load (`src/aachar/baker.ts`).
 - `node scripts/qa-room.mjs` room protocol QA against `net:dev`; `ROOM_URL=https://banjopocalypse-net.scomace.workers.dev` to test production
 - online play: title → PLAY ONLINE → host shares the 4-letter code (or the invite link, `?room=CODE`); delay-based lockstep over the room relay, state hashes exchanged every second as a desync canary. `?online=host` / `?online=join&room=CODE` (+`&cast=`) is the QA autopilot; `?net=http://127.0.0.1:8787` points the client at `net:dev`
 - `node scripts/qa-online.mjs` two-browser lockstep E2E: lobby autopilot, live input both ways, tick-600 hashes must match (needs `vite --port 5200`; `QA_NET=` to override the relay)
+- online resilience: a dropped player auto-rejoins their slot (rooms linger 2 min empty) and the resume protocol refills the missed inputs from both send buffers; "WAITIN' ON YER PARTNER" shows during stalls, ping/delay readout bottom-right
+- `node scripts/qa-reconnect.mjs` drops the guest's socket mid-level and proves lockstep survives: reconnect, resume, identical hashes after (needs `vite --port 5200`)
 - in a quickstart run: `0` clears the level, `9` forces a frenzy, `8` claims the shrine
 
 ## Ship

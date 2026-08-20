@@ -33,12 +33,13 @@ export function GameOverOverlay({
   useEffect(() => {
     if (!isContinue) return;
     if (count <= 0) {
-      onExit();
-      return;
+      // online guest: linger a beat — the host's continue may be in flight
+      const t = setTimeout(onExit, waitForHost ? 2500 : 0);
+      return () => clearTimeout(t);
     }
     const t = setTimeout(() => setCount((c) => c - 1), 1000);
     return () => clearTimeout(t);
-  }, [count, isContinue, onExit]);
+  }, [count, isContinue, waitForHost, onExit]);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {

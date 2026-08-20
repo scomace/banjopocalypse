@@ -95,10 +95,10 @@ try {
     else ok(`rosters match (${casts0}); positions read at different moments`);
   } else ok(`identical player snapshots: ${JSON.stringify(states[0])}`);
 
-  // partner-leave: guest bails, host must see the overlay state
+  // partner-leave: guest bails, host holds the line (reconnect grace overlay)
   await guest.close();
-  await waitFor(host, () => document.body.innerText.includes("PARTNER'S GONE"), "partner-left overlay", 15000);
-  ok("host saw the partner leave");
+  await waitFor(host, () => document.body.innerText.includes("HOLD YER HORSES"), "partner-drop overlay", 15000);
+  ok("host saw the partner drop and is holding the line");
 
   for (const [name, page] of [["host", host]]) {
     if (page.errors.length) fail(`${name} console errors: ${page.errors.slice(0, 3).join(" | ")}`);

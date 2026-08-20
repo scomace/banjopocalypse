@@ -385,7 +385,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       ridden: 0,
       wobblePhase: sim.rng() * Math.PI * 2,
     });
-    emit(sim, { t: "sfx", name: "hic", pitch: p.hicPitch });
+    emit(sim, { t: "sfx", name: "hic", pitch: p.hicPitch, pan: (p.x / FIELD_W) * 2 - 1 });
     p.anim = "blow";
     p.animLock = 14;
   }

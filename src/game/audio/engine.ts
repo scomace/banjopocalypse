@@ -1,39 +1,36 @@
-// The jug-band audio engine. 100% synthesized WebAudio, zero asset files,
+// The jug-band audio engine. SFX are 100% synthesized WebAudio,
 // architecture in the spirit of accountingsurvivor's lib/sfx/synth.ts
-// (buffer-rendered hot sounds, live nodes for the band, one master bus).
-// All music is generated from original chord/roll pattern data.
+// (buffer-rendered hot sounds, one master bus).
 //
-// Instruments:
+// Instruments (SFX):
 //   banjo    - Karplus-Strong plucked string rendered into cached buffers
-//   jug bass - sine with a breathy chiff attack
-//   washboard- bandpassed noise sixteenths
 //   jawharp  - comb-filtered square twang with pitch bend
-//   fiddle   - detuned saws + vibrato (bosses, frenzies)
+//   fiddle   - detuned saws + vibrato (duels)
 //   choir    - detuned saw stack through a formant-ish filter (prayer/endings)
 //
-// The director reacts to sim state every tick: base = banjo + jug; washboard
-// joins when 3 or fewer enemies remain; fiddle joins during any frenzy;
-// hurry-up drops to half-time until the Revenuer spawns, then double-time.
-// The Mega-Belch sidechain-ducks the whole music bus for half a second.
+// Music is mp3 tracks from public/music: each level rolls a random track and
+// loops it until the level index changes. The track is routed through the
+// music bus, so the volume slider applies and the Mega-Belch still
+// sidechain-ducks it for half a second.
 
 import type { FxEvent, Sim } from "../sim/types";
 import { loadSettings } from "../core/save";
 
-const LOOKAHEAD_S = 0.14;
-
-type BandState = {
-  worldIndex: number;
-  key: number;
-  bpm: number;
-  minor: boolean;
-  nextNoteTime: number;
-  step: number; // 16th-note counter
-  duckUntil: number;
-  halfTime: boolean;
-  doubleTime: boolean;
-  washboard: boolean;
-  fiddle: boolean;
-};
+// Everything in public/music. Vite can't glob the public dir, so the list
+// lives here; add new files to both places.
+const MUSIC_TRACKS = [
+  "A Day On the Farm.mp3",
+  "Banjo Farm Loop.mp3",
+  "Banjo Hoedown- Andy Slatter.mp3",
+  "Banjo.mp3",
+  "Cheerful Banjo.mp3",
+  "Country Folk.mp3",
+  "Dagored_banjo-bluegrass-country-fun_main.mp3",
+  "Full Track.mp3",
+  "Lonely Banjo.mp3",
+  "Never Stop Smile main.mp3",
+  "Rodeo Banjo.mp3",
+];
 
 function midiToFreq(m: number): number {
   return 440 * Math.pow(2, (m - 69) / 12);
@@ -47,7 +44,14 @@ export class JugBandAudio {
   private sfxBus!: GainNode;
   private noiseBuf!: AudioBuffer;
   private banjoCache = new Map<number, AudioBuffer>();
-  private band: BandState | null = null;
+  private burpBuf: AudioBuffer | null = null;
+  private burpBufRev: AudioBuffer | null = null;
+  private burpVoices: AudioBufferSourceNode[] = [];
+  private lastBurpSemis = Infinity;
+  private trackEl: HTMLAudioElement | null = null;
+  private trackLevel = -1;
+  private lastTrackIdx = -1;
+  private trackPlayPending = false;
   private muted = false;
   musicVolume = 0.7;
   sfxVolume = 0.9;
@@ -87,6 +91,7 @@ export class JugBandAudio {
       this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      void this.loadBurp(ctx);
       return ctx;
     } catch {
       return null;
@@ -104,6 +109,106 @@ export class JugBandAudio {
   setMuted(m: boolean): void {
     this.muted = m;
     if (this.ctx) this.master.gain.value = m ? 0 : 1;
+  }
+
+  // ------------------------------------------------------- the cute burp
+  // The engine's one sampled sound. Every bubble blow layers it under the
+  // synthesized hic, re-rolled per play so no two burps sound alike.
+
+  private async loadBurp(ctx: AudioContext): Promise<void> {
+    try {
+      const res = await fetch(`${import.meta.env.BASE_URL}sounds/cuteburp.mp3`);
+      const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      this.burpBuf = buf;
+      // pre-render a reversed copy for the rare jackpot burp
+      const rev = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
+      for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+        const src = buf.getChannelData(ch);
+        const dst = rev.getChannelData(ch);
+        for (let i = 0; i < src.length; i++) dst[i] = src[src.length - 1 - i];
+      }
+      this.burpBufRev = rev;
+    } catch {
+      // no burp asset: the synth hic carries on alone
+    }
+  }
+
+  private burp(when: number, pan: number): void {
+    const ctx = this.ctx;
+    const reversed = Math.random() < 0.05;
+    const buf = reversed ? this.burpBufRev : this.burpBuf;
+    if (!ctx || !buf) return;
+
+    // one rate knob for pitch+length, rolled in semitones so up- and
+    // down-shifts are equally likely; re-roll once if too close to last play
+    let semis = -6 + Math.random() * 14;
+    if (Math.abs(semis - this.lastBurpSemis) < 1) semis = -6 + Math.random() * 14;
+    this.lastBurpSemis = semis;
+    const rate = Math.pow(2, semis / 12);
+    const dur = buf.duration / rate;
+
+    // voice cap: steal the oldest so bubble spam doesn't wall up
+    while (this.burpVoices.length >= 4) {
+      try {
+        this.burpVoices.shift()!.stop();
+      } catch {
+        /* already stopped */
+      }
+    }
+
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.playbackRate.setValueAtTime(rate, when);
+    // drooping burp: sag 10-18% over the tail
+    if (Math.random() < 0.4) {
+      src.playbackRate.linearRampToValueAtTime(rate * (0.82 + Math.random() * 0.08), when + dur);
+    }
+
+    // dark vs bright reads as a different burp entirely (log-random cutoff)
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = 1200 * Math.pow(8000 / 1200, Math.random());
+
+    const g = ctx.createGain();
+    const gain = 0.55 * (0.7 + Math.random() * 0.3); // downward-only volume roll
+    g.gain.setValueAtTime(gain, when);
+
+    const panner = ctx.createStereoPanner();
+    panner.pan.value = Math.max(-1, Math.min(1, pan)) * 0.6;
+
+    src.connect(lp);
+    lp.connect(g);
+    g.connect(panner);
+    panner.connect(this.sfxBus);
+
+    // trimmed burp: sometimes only the first 60-85% escapes
+    // (slack for the droop case, where the sagging rate stretches the tail)
+    let stopAt = when + dur * 1.25 + 0.02;
+    if (Math.random() < 0.3) {
+      const cut = when + dur * (0.6 + Math.random() * 0.25);
+      g.gain.setValueAtTime(gain, cut - 0.04);
+      g.gain.linearRampToValueAtTime(0.0001, cut);
+      stopAt = cut + 0.02;
+    }
+
+    // occasional holler slapback: one 120ms echo, not a hall
+    if (Math.random() < 0.18) {
+      const d = ctx.createDelay(0.3);
+      d.delayTime.value = 0.12;
+      const dg = ctx.createGain();
+      dg.gain.value = 0.3;
+      panner.connect(d);
+      d.connect(dg);
+      dg.connect(this.sfxBus);
+    }
+
+    src.start(when);
+    src.stop(stopAt);
+    this.burpVoices.push(src);
+    src.onended = () => {
+      const i = this.burpVoices.indexOf(src);
+      if (i >= 0) this.burpVoices.splice(i, 1);
+    };
   }
 
   // ------------------------------------------------------------ helpers
@@ -224,35 +329,6 @@ export class JugBandAudio {
     src.start(when);
   }
 
-  private jug(when: number, midi: number, gain: number): void {
-    const ctx = this.ctx!;
-    // breath chiff
-    this.noise(when, 0.08, 300, 1.4, gain * 0.5, "bandpass", this.musicBus);
-    this.tone(when, 0.34, midiToFreq(midi), "sine", gain, {
-      attack: 0.02,
-      bus: this.musicBus,
-    });
-    void ctx;
-  }
-
-  private wash(when: number, accent: boolean): void {
-    this.noise(when, accent ? 0.07 : 0.04, 5200, 2.2, accent ? 0.16 : 0.09, "bandpass", this.musicBus);
-  }
-
-  private fiddleNote(when: number, midi: number, dur: number, gain: number): void {
-    this.tone(when, dur, midiToFreq(midi), "sawtooth", gain, {
-      attack: 0.05,
-      vibratoHz: 5.5,
-      vibratoCents: 18,
-      bus: this.musicBus,
-    });
-    this.tone(when, dur, midiToFreq(midi), "sawtooth", gain * 0.6, {
-      attack: 0.05,
-      detune: 9,
-      bus: this.musicBus,
-    });
-  }
-
   // ------------------------------------------------------------ SFX
 
   handleFx(events: FxEvent[]): void {
@@ -260,7 +336,7 @@ export class JugBandAudio {
     if (!ctx || this.muted) return;
     const now = ctx.currentTime;
     for (const e of events) {
-      if (e.t === "sfx") this.playSfx(e.name, e.pitch ?? 1, now);
+      if (e.t === "sfx") this.playSfx(e.name, e.pitch ?? 1, now, e.pan ?? 0);
       else if (e.t === "belch") {
         // duck the band under the Mega-Belch
         this.musicDuck.gain.setValueAtTime(0.15, now);
@@ -269,7 +345,7 @@ export class JugBandAudio {
     }
   }
 
-  playSfx(name: string, pitch: number, now?: number): void {
+  playSfx(name: string, pitch: number, now?: number, pan = 0): void {
     const ctx = this.ensure();
     if (!ctx || this.muted) return;
     const t = now ?? ctx.currentTime;
@@ -278,6 +354,7 @@ export class JugBandAudio {
         // tiny glottal blip: pitch-varied per blow
         this.tone(t, 0.07, 420 * pitch, "square", 0.12, { endFreq: 720 * pitch, attack: 0.002 });
         this.noise(t, 0.03, 1800, 2, 0.05);
+        this.burp(t, pan);
         break;
       }
       case "megaBelch": {
@@ -580,97 +657,44 @@ export class JugBandAudio {
     }
   }
 
-  // ------------------------------------------------------------ the band
+  // ------------------------------------------------------------ level music
 
-  startBand(sim: Sim): void {
-    const ctx = this.ensure();
-    if (!ctx) return;
-    this.band = {
-      worldIndex: sim.world.index,
-      key: sim.world.music.key,
-      bpm: sim.world.music.bpm,
-      minor: sim.world.music.minor,
-      nextNoteTime: ctx.currentTime + 0.1,
-      step: 0,
-      duckUntil: 0,
-      halfTime: false,
-      doubleTime: false,
-      washboard: false,
-      fiddle: false,
-    };
-  }
-
-  stopBand(): void {
-    this.band = null;
-  }
-
-  /** Called once per sim tick from the host. Schedules ahead of the clock. */
+  /** Called once per sim tick from the host. Rolls a fresh random track
+   *  whenever the level index changes and keeps it looping until then. */
   tickMusic(sim: Sim): void {
     const ctx = this.ctx;
     if (!ctx || this.muted) return;
-    if (!this.band || this.band.worldIndex !== sim.world.index) this.startBand(sim);
-    const band = this.band!;
 
-    // react to sim state
-    const enemiesLeft = sim.enemies.filter((e) => e.phase.kind !== "dying").length;
-    band.washboard = enemiesLeft > 0 && enemiesLeft <= 3;
-    band.fiddle = sim.players.some((p) => p.frenzy) || sim.isBoss;
-    const pastHurry = sim.revenuer.active;
-    const nearHurry = !pastHurry && !sim.isBoss && sim.tick > 40 * 60 && sim.status === "play";
-    band.halfTime = nearHurry;
-    band.doubleTime = pastHurry;
+    if (sim.levelIndex !== this.trackLevel) {
+      this.trackLevel = sim.levelIndex;
+      // re-roll once on a repeat so back-to-back levels usually differ
+      let idx = Math.floor(Math.random() * MUSIC_TRACKS.length);
+      if (idx === this.lastTrackIdx) idx = Math.floor(Math.random() * MUSIC_TRACKS.length);
+      this.lastTrackIdx = idx;
 
-    const spb = 60 / (band.bpm * (band.doubleTime ? 1.6 : band.halfTime ? 0.6 : 1));
-    const sixteenth = spb / 4;
+      if (!this.trackEl) {
+        this.trackEl = new Audio();
+        this.trackEl.loop = true;
+        const node = ctx.createMediaElementSource(this.trackEl);
+        node.connect(this.musicBus);
+      }
+      this.trackEl.src = `${import.meta.env.BASE_URL}music/${encodeURIComponent(MUSIC_TRACKS[idx])}`;
+    }
 
-    while (band.nextNoteTime < ctx.currentTime + LOOKAHEAD_S) {
-      this.scheduleStep(band, band.nextNoteTime, band.step, sim);
-      band.nextNoteTime += sixteenth;
-      band.step = (band.step + 1) % 64;
+    // keep nudging play: covers autoplay rejection before the first gesture
+    const el = this.trackEl;
+    if (el && el.paused && !this.trackPlayPending) {
+      this.trackPlayPending = true;
+      el.play().then(
+        () => (this.trackPlayPending = false),
+        () => (this.trackPlayPending = false),
+      );
     }
   }
 
-  private scheduleStep(band: BandState, when: number, step: number, sim: Sim): void {
-    const bar = Math.floor(step / 16) % 4;
-    const beat = Math.floor((step % 16) / 4);
-    const six = step % 4;
-    const root = 45 + band.key; // A1-region + key offset
-    const third = band.minor ? 3 : 4;
-    // I - I - IV - V, the front-porch special
-    const chordOffsets = [0, 0, 5, 7][bar];
-    const chordRoot = root + chordOffsets;
-    const chord = [chordRoot, chordRoot + third, chordRoot + 7];
-
-    // jug bass: beats 1 and 3, walking on bar turns
-    if (six === 0 && (beat === 0 || beat === 2)) {
-      const walk = beat === 2 && bar === 3 ? 2 : 0;
-      this.jug(when, chordRoot - 12 + walk, 0.4);
-    }
-
-    // banjo roll: forward roll (steady 16ths across chord tones + high drone)
-    const rollTone = [0, 2, 1, 3][six]; // pinch pattern
-    const midi =
-      rollTone === 3
-        ? chordRoot + 12 + (band.minor ? 3 : 4)
-        : chord[rollTone % 3] + 12;
-    const accent = six === 0 ? 0.34 : 0.22;
-    // thin the roll during half-time dread
-    if (!band.halfTime || six % 2 === 0) {
-      this.banjo(when, midi, accent);
-    }
-
-    // washboard: 16ths with backbeat accents when the level is almost clear
-    if (band.washboard || band.doubleTime) {
-      this.wash(when, beat === 1 || beat === 3 ? six === 0 : false);
-    }
-
-    // fiddle: long chord tones on the beat during frenzy/boss
-    if (band.fiddle && six === 0 && (beat === 0 || beat === 2)) {
-      const lead = chord[(bar + beat) % 3] + 24;
-      this.fiddleNote(when, lead, 0.5, 0.09);
-    }
-
-    void sim;
+  stopMusic(): void {
+    this.trackLevel = -1;
+    this.trackEl?.pause();
   }
 }
 

@@ -24,6 +24,8 @@ const MAX_CAP = 4;
 const DEFAULT_CAP = 2;
 /** Idle rooms are wiped by alarm this long after creation (refreshed while occupied). */
 const ROOM_TTL_MS = 6 * 60 * 60 * 1000;
+/** An emptied room lingers this long so a dropped pair can both wander back. */
+const EMPTY_GRACE_MS = 2 * 60 * 1000;
 const MAX_MSG_BYTES = 2048;
 
 function randomCode(): string {
@@ -119,7 +121,15 @@ export class RoomDO extends DurableObject<Env> {
     this.broadcast(JSON.stringify(parsed), ws);
   }
 
-  async webSocketClose(ws: WebSocket): Promise<void> {
+  async webSocketClose(ws: WebSocket, code: number, reason: string): Promise<void> {
+    // echo the close back or a client-initiated close hangs in CLOSING forever.
+    // 1005/1006/1015 are reserved "no status" codes — sending them throws.
+    const echoCode = code === 1005 || code === 1006 || code === 1015 ? 1000 : code;
+    try {
+      ws.close(echoCode, (reason || "bye").slice(0, 100));
+    } catch {
+      // already fully closed
+    }
     const att = ws.deserializeAttachment() as Attachment | null;
     const others = this.ctx.getWebSockets().filter((w) => w !== ws);
     if (att) {
@@ -127,7 +137,8 @@ export class RoomDO extends DurableObject<Env> {
         w.send(JSON.stringify({ t: "peer", event: "leave", idx: att.idx }));
       }
     }
-    if (others.length === 0) await this.ctx.storage.deleteAll();
+    // don't wipe immediately: a briefly-offline pair may both reconnect
+    if (others.length === 0) await this.ctx.storage.setAlarm(Date.now() + EMPTY_GRACE_MS);
   }
 
   /** TTL sweep: wipe the room unless someone is still connected. */
