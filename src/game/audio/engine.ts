@@ -44,14 +44,16 @@ function midiToFreq(m: number): number {
  * or broken file is NOT an error: playSample returns false and the case
  * falls back to synth, so the game sounds right before the recording lands.
  *   gain: playback level (post-normalize)   cut: cap on played length, s
+ *   fade: fade-out length before the cut, s (default 0.03)
  */
-const SAMPLE_SFX: Record<string, { file: string; gain?: number; cut?: number }> = {
+const SAMPLE_SFX: Record<string, { file: string; gain?: number; cut?: number; fade?: number }> = {
   /** gassed out: the hiccup that ate the double jump */
   windFail: { file: "wind-fail.mp3", gain: 0.8 },
   /** last pips of wind: the wheeze under the jump */
   windStrain: { file: "wind-strain.mp3", gain: 0.5 },
-  /** Granny Mae's air special: the bean-powered scoot */
-  fart: { file: "fart.mp3", gain: 0.8 },
+  /** Granny Mae's air special: the bean-powered scoot. The recording has a
+   *  ~230ms room tail after its ~160ms body; cut it off so it reads dry. */
+  fart: { file: "fart.mp3", gain: 0.8, cut: 0.2, fade: 0.05 },
   /** Granny Mae gassed out: the whiff when the beans run dry */
   wetfart: { file: "wetfart.mp3", gain: 0.8 },
   /** the hog stampede special popping */
@@ -209,7 +211,7 @@ export class JugBandAudio {
     const natural = buf.duration / pitch;
     const len = def.cut ? Math.min(natural, def.cut) : natural;
     // quick fade so a cut never clicks
-    g.gain.setValueAtTime(gain, Math.max(when, when + len - 0.03));
+    g.gain.setValueAtTime(gain, Math.max(when, when + len - (def.fade ?? 0.03)));
     g.gain.linearRampToValueAtTime(0.0001, when + len);
     const panner = ctx.createStereoPanner();
     panner.pan.value = Math.max(-1, Math.min(1, pan)) * 0.6;
