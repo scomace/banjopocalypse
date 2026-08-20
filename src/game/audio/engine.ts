@@ -119,6 +119,20 @@ export class JugBandAudio {
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}sounds/cuteburp.mp3`);
       const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      // the sample is mastered ~17dB quiet (peak 0.15): normalize to a 0.9
+      // peak once at load so the gain math in burp() means what it says
+      let peak = 0;
+      for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+        const d = buf.getChannelData(ch);
+        for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
+      }
+      if (peak > 0.001) {
+        const s = 0.9 / peak;
+        for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+          const d = buf.getChannelData(ch);
+          for (let i = 0; i < d.length; i++) d[i] *= s;
+        }
+      }
       this.burpBuf = buf;
       // pre-render a reversed copy for the rare jackpot burp
       const rev = ctx.createBuffer(buf.numberOfChannels, buf.length, buf.sampleRate);
@@ -351,9 +365,11 @@ export class JugBandAudio {
     const t = now ?? ctx.currentTime;
     switch (name) {
       case "hic": {
-        // tiny glottal blip: pitch-varied per blow
-        this.tone(t, 0.07, 420 * pitch, "square", 0.12, { endFreq: 720 * pitch, attack: 0.002 });
-        this.noise(t, 0.03, 1800, 2, 0.05);
+        // tiny glottal blip: pitch-varied per blow. When the sampled burp is
+        // loaded it carries the sound; the synth just adds the attack blip.
+        const hicScale = this.burpBuf ? 0.35 : 1;
+        this.tone(t, 0.07, 420 * pitch, "square", 0.12 * hicScale, { endFreq: 720 * pitch, attack: 0.002 });
+        this.noise(t, 0.03, 1800, 2, 0.05 * hicScale);
         this.burp(t, pan);
         break;
       }
