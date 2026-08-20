@@ -12,14 +12,16 @@
 // Run: npx tsx scripts/sim-smoke.mts
 
 import { getLevelDef, levelCountCheck } from "../src/game/levels";
+import { hashSim } from "../src/game/sim/hash";
 import { worldForLevel, isBossLevel } from "../src/game/levels/worlds";
 import { parseLevel } from "../src/game/levels/parse";
-import { createSim, step, startFrenzy } from "../src/game/sim/sim";
+import { createSim, step, startFrenzy, hurtPlayer } from "../src/game/sim/sim";
 import type { Sim } from "../src/game/sim/types";
 import { WEAPONS } from "../src/game/sim/weapons";
 import { CAST } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
+import { P_HEIGHT, PVP_BOUNCE, PVP_BOUNCE_VY } from "../src/game/sim/constants";
 import type { ShrineGift } from "../src/game/sim/types";
 import {
   MAX_WEAPONS,
@@ -366,6 +368,162 @@ console.log("[8] run layer hands + shrine offers");
   for (const p of coop.players) if (p) p.loadout.weapons = WEAPONS.slice(0, 6).map((w) => ({ id: w.id, level: 2 }));
   const relics = shrineGiftsFor(coop);
   if (!relics.every((g) => g.kind === "relic")) fail("full arsenal shrine should offer relics only");
+}
+
+// ---- 9. determinism: same seed + same inputs => identical state hashes ----
+// The netcode contract. Every level is replayed from scratch with an
+// identical command stream; checkpoint hashes must match exactly.
+console.log("[9] determinism replay (99 solo + 9 co-op levels, run twice)");
+{
+  const mkStream = (seedN: number, ticks: number): number[] => {
+    const rng = mulberry32(seedN);
+    const cmds: number[] = [];
+    let hookHold = 0;
+    for (let t = 0; t < ticks; t++) {
+      if (hookHold > 0) hookHold--;
+      else if (rng() < 0.05) hookHold = 10 + Math.floor(rng() * 50);
+      cmds.push(
+        (rng() < 0.4 ? 1 : 0) |
+          (rng() < 0.4 ? 2 : 0) |
+          (rng() < 0.3 ? 4 : 0) |
+          (rng() < 0.3 ? 8 : 0) |
+          (hookHold > 0 ? 16 : 0),
+      );
+    }
+    return cmds;
+  };
+  const replay = (make: () => Sim, streams: number[][]): number[] => {
+    const sim = make();
+    const hashes: number[] = [];
+    let prev: number[] = streams.map(() => 0);
+    for (let t = 0; t < streams[0].length; t++) {
+      const inputs = streams.map((s) => s[t]);
+      step(sim, inputs, prev);
+      prev = inputs;
+      if (t % 300 === 299) hashes.push(hashSim(sim));
+    }
+    hashes.push(hashSim(sim));
+    return hashes;
+  };
+  // solo, Buford so the grapple state is exercised too
+  for (let lvl = 1; lvl <= 99; lvl++) {
+    const streams = [mkStream(31337 + lvl, 900)];
+    const make = () => mkSim(lvl, [{ id: "washboard", level: 2 }], "buford");
+    const a = replay(make, streams);
+    const b = replay(make, streams);
+    if (a.join() !== b.join()) fail(`level ${lvl}: solo replay diverged (${a.join()} vs ${b.join()})`);
+  }
+  // 2-player (one level per world): covers co-op paths + the PVP head bounce
+  for (let w = 0; w < 9; w++) {
+    const lvl = w * 11 + 3;
+    const make = () =>
+      createSim({
+        seed: 555 + lvl,
+        levelDef: getLevelDef(lvl),
+        world: worldForLevel(lvl),
+        levelIndex: lvl,
+        isBoss: false,
+        players: [
+          { castId: "earl", loadout: { weapons: [{ id: "twang", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+          { castId: "buford", loadout: { weapons: [{ id: "washboard", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+        ],
+        deathless: false,
+        shrine: null,
+      });
+    const streams = [mkStream(111 + lvl, 900), mkStream(222 + lvl, 900)];
+    const a = replay(make, streams);
+    const b = replay(make, streams);
+    if (a.join() !== b.join()) fail(`level ${lvl}: co-op replay diverged`);
+  }
+  console.log("    replays hash-identical");
+}
+
+// ---- 10. PVP head bounce ----
+console.log("[10] pvp head bounce");
+if (PVP_BOUNCE) {
+  const sim = createSim({
+    seed: 42,
+    levelDef: getLevelDef(1),
+    world: worldForLevel(1),
+    levelIndex: 1,
+    isBoss: false,
+    players: [
+      { castId: "earl", loadout: { weapons: [{ id: "twang", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+      { castId: "buford", loadout: { weapons: [{ id: "washboard", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+    ],
+    deathless: false,
+    shrine: null,
+  });
+  const [a, b] = sim.players;
+  a.x = 300;
+  b.x = 480;
+  // through the intro, then settle both on the floor out of bounce range
+  for (let t = 0; t < 220 && !(a.grounded && b.grounded); t++) {
+    a.invuln = 60;
+    b.invuln = 60;
+    step(sim, [0, 0], [0, 0]);
+  }
+  if (!a.grounded || !b.grounded) fail("bounce test: players never settled");
+  // drop the bouncer onto the trampoline's head
+  a.x = b.x;
+  a.y = b.y - P_HEIGHT - 2;
+  a.vx = 0;
+  a.vy = 3;
+  a.grounded = false;
+  step(sim, [0, 0], [0, 0]);
+  if (a.vy > PVP_BOUNCE_VY + 3) fail(`bounce did not launch the bouncer (vy ${a.vy.toFixed(1)})`);
+  if (b.squash <= 0) fail("bounce did not squash the trampoline");
+  // a squashed jump is a stump-hop, not a real jump
+  step(sim, [0, 4], [0, 0]);
+  if (b.vy >= 0) fail("squashed player could not jump at all");
+  if (b.vy < b.jumpVy * 0.7) fail(`squashed jump too strong (vy ${b.vy.toFixed(1)} vs full ${b.jumpVy})`);
+  console.log("    bounce + squash ok");
+} else {
+  console.log("    PVP_BOUNCE is off; skipped");
+}
+
+// ---- 11. co-op ghost rules: free partner save, party wipe pays ----
+console.log("[11] co-op ghost rules");
+{
+  const sim = createSim({
+    seed: 7,
+    levelDef: getLevelDef(1),
+    world: worldForLevel(1),
+    levelIndex: 1,
+    isBoss: false,
+    players: [
+      { castId: "earl", loadout: { weapons: [{ id: "twang", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+      { castId: "buford", loadout: { weapons: [{ id: "goodbook", level: 2 }], tonics: [], evolved: [] }, livesLeft: 3 },
+    ],
+    deathless: false,
+    shrine: null,
+  });
+  for (let t = 0; t < 100; t++) step(sim, [0, 0], [0, 0]); // through the intro
+  const [a, b] = sim.players;
+  // single death: ghost, no life charged
+  a.invuln = 0;
+  a.prayer = 0;
+  hurtPlayer(sim, a);
+  if (!a.ghost || a.alive) fail("co-op death should ghost");
+  if (a.livesLeft !== 3) fail(`lone ghost charged a life (${a.livesLeft})`);
+  // partner pop: free revive
+  a.ghost!.x = b.x;
+  a.ghost!.y = b.y - 10;
+  b.invuln = 60;
+  step(sim, [0, 0], [0, 0]);
+  if (!a.alive || a.livesLeft !== 3) fail(`partner save should be free (alive ${a.alive}, lives ${a.livesLeft})`);
+  // party wipe: both ghosts regenerate in place, one life each
+  a.invuln = 0;
+  b.invuln = 0;
+  b.prayer = 0;
+  hurtPlayer(sim, a);
+  hurtPlayer(sim, b);
+  if (!a.ghost || !b.ghost) fail("party wipe: both should ghost first");
+  step(sim, [0, 0], [0, 0]);
+  if (!a.alive || !b.alive) fail("party wipe: both should regenerate");
+  if (a.livesLeft !== 2 || b.livesLeft !== 2) fail(`party wipe should charge one life each (${a.livesLeft}, ${b.livesLeft})`);
+  if (a.invuln <= 0 || b.invuln <= 0) fail("regenerated players should get mercy invuln");
+  console.log("    ghost rules ok");
 }
 
 // ---- 6. cast sanity ----

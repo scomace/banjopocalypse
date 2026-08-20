@@ -408,7 +408,6 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
 
   switch (pr.kind) {
     case "book": {
-      const owner = sim.players[pr.owner === 0 ? 0 : sim.players.length > 1 ? 1 : 0];
       const p = sim.players.find((q) => q.index === pr.owner);
       if (!p || !p.frenzy || p.frenzy.weapon !== "goodbook" || !p.alive) return false;
       const evolved = p.loadout.evolved.includes("goodbook");
@@ -426,7 +425,6 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
           if (Math.abs(dx) < 160) e.x += Math.sign(dx) * 0.35;
         }
       }
-      void owner;
       return true;
     }
     case "twangring": {

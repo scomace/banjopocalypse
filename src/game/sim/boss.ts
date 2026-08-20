@@ -144,7 +144,19 @@ export function stepBoss(sim: Sim): void {
     spawnMinions(sim, boss, 2);
   }
 
-  const target = sim.players.find((p) => p.alive) ?? null;
+  // nearest living player, so online P2 isn't permanently ignored
+  let target: (typeof sim.players)[number] | null = null;
+  {
+    let bestD = Infinity;
+    for (const p of sim.players) {
+      if (!p.alive) continue;
+      const d = Math.abs(p.x - boss.x) + Math.abs(p.y - boss.y);
+      if (d < bestD) {
+        bestD = d;
+        target = p;
+      }
+    }
+  }
   const speedUp = 1 + (boss.phase - 1) * 0.35;
 
   // ---- movement personalities ----

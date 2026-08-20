@@ -43,6 +43,11 @@ import {
   P_MAX_SPEED,
   P_RESPAWN_TICKS,
   P_WIDTH,
+  PVP_BOUNCE,
+  PVP_BOUNCE_LAUNCH_TICKS,
+  PVP_BOUNCE_VY,
+  PVP_SQUASH_JUMP_MULT,
+  PVP_SQUASH_TICKS,
   SCORE_POP_BASE,
   SPECIAL_FIRST_TICKS,
   SPECIAL_INTERVAL_TICKS,
@@ -142,6 +147,8 @@ export function createSim(cfg: SimConfig): Sim {
       hook: null,
       hookCooldown: 0,
       hookKick: 0,
+      pvpLaunch: 0,
+      squash: 0,
       anim: "idle",
       animLock: 0,
       hicPitch: 1,
@@ -223,7 +230,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     // partner pop check
     const partner = sim.players.find((q) => q !== p && q.alive);
     if (partner && circleOverlapsBox(g.x, g.y, 20, partner.x, partner.y, P_WIDTH + 8, P_HEIGHT)) {
-      // The death already charged the life; popping the ghost is free.
+      // A partner pop is a free save — no life was charged for this death.
       p.ghost = null;
       p.alive = true;
       p.x = partner.x;
@@ -292,14 +299,17 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   else if (p.coyote > 0) p.coyote--;
 
   if (p.jumpBuffer > 0 && p.coyote > 0) {
-    p.vy = p.jumpVy;
+    p.vy = p.jumpVy * (p.squash > 0 ? PVP_SQUASH_JUMP_MULT : 1);
     p.grounded = false;
     p.coyote = 0;
     p.jumpBuffer = 0;
     emit(sim, { t: "sfx", name: "jump", pitch: 0.95 + sim.rng() * 0.1 });
   }
-  // variable jump height (a Fishin' Line launch is not a jump: leave it be)
-  if (!jump && p.vy < P_JUMP_CUT_VY && !swinging && p.hookKick <= 0) p.vy = P_JUMP_CUT_VY;
+  // variable jump height (a Fishin' Line launch or head bounce is not a
+  // jump: leave those be)
+  if (!jump && p.vy < P_JUMP_CUT_VY && !swinging && p.hookKick <= 0 && p.pvpLaunch <= 0) {
+    p.vy = P_JUMP_CUT_VY;
+  }
 
   // gravity
   p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
@@ -333,6 +343,9 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       }
     }
   }
+
+  // head bounce off yer partner (kill switch: PVP_BOUNCE in constants)
+  if (PVP_BOUNCE && p.vy > 0 && !swinging) stepHeadBounce(sim, p);
 
   // the line goes taut
   applyHookConstraint(p);
@@ -400,9 +413,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     }
   }
 
-  // invuln / prayer timers
+  // invuln / prayer / bounce timers
   if (p.invuln > 0) p.invuln--;
   if (p.prayer > 0) p.prayer--;
+  if (p.pvpLaunch > 0) p.pvpLaunch--;
+  if (p.squash > 0) p.squash--;
 
   // frenzy timer
   if (p.frenzy) {
@@ -425,6 +440,30 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   }
 }
 
+// The whole PVP head-bounce mechanic is this function + its one PVP_BOUNCE
+// call site in stepPlayer; the constants.ts flag removes it wholesale.
+// A falling player springboards off their partner's head — a high,
+// uncuttable rise for the bouncer, buckled knees for the trampoline.
+function stepHeadBounce(sim: Sim, p: PlayerState): void {
+  for (const q of sim.players) {
+    if (q === p || !q.alive || q.ghost || q.spectating) continue;
+    const headY = q.y - P_HEIGHT;
+    const dx = Math.abs(p.x - q.x);
+    const feetAbove = p.y <= headY + 8;
+    const feetNear = p.y + p.vy >= headY - 2 && p.y <= headY + 14;
+    if (dx < P_WIDTH && feetAbove && feetNear) {
+      p.vy = PVP_BOUNCE_VY;
+      p.y = headY - 1;
+      p.grounded = false;
+      p.pvpLaunch = PVP_BOUNCE_LAUNCH_TICKS;
+      q.squash = PVP_SQUASH_TICKS;
+      emit(sim, { t: "sfx", name: "bounce", pitch: 0.75 });
+      emit(sim, { t: "burst", text: "BOING!", x: p.x, y: headY - 20 });
+      return;
+    }
+  }
+}
+
 export function hurtPlayer(sim: Sim, p: PlayerState): void {
   if (p.invuln > 0 || p.prayer > 0 || !p.alive) return;
   if (p.hogFatCharge) {
@@ -438,31 +477,30 @@ export function hurtPlayer(sim: Sim, p: PlayerState): void {
   p.frenzy = null;
   p.hook = null;
   p.hookKick = 0;
-  p.livesLeft--;
-  sim.deaths.push(p.index);
   emit(sim, { t: "sfx", name: "playerDie" });
   emit(sim, { t: "balloon", player: p.index, trigger: "death" });
   emit(sim, { t: "shake", power: 5 });
   p.anim = "die";
 
-  const partnerAlive = sim.players.some((q) => q !== p && (q.alive || q.ghost));
-  if (p.livesLeft > 0) {
-    if (partnerAlive) {
-      // co-op: drift as a ghost bubble the partner can pop
-      p.ghost = {
-        x: p.x,
-        y: Math.max(60, p.y - P_HEIGHT),
-        vx: p.x < FIELD_W / 2 ? 0.7 : -0.7,
-        vy: -0.5,
-        ticks: 0,
-      };
-    } else {
-      p.respawnIn = P_RESPAWN_TICKS;
-    }
-  } else {
-    p.spectating = !partnerAlive ? false : true;
-    // both out of lives -> run layer sees allDead status below
+  const partnerUp = sim.players.some((q) => q !== p && (q.alive || q.ghost));
+  if (partnerUp) {
+    // co-op: drift as a ghost bubble. No life charged yet — a partner pop
+    // is a free save; the charge lands only on a party wipe (see step()).
+    p.ghost = {
+      x: p.x,
+      y: Math.max(60, p.y - P_HEIGHT),
+      vx: p.x < FIELD_W / 2 ? 0.7 : -0.7,
+      vy: -0.5,
+      ticks: 0,
+    };
+    return;
   }
+  p.livesLeft--;
+  sim.deaths.push(p.index);
+  if (p.livesLeft > 0) {
+    p.respawnIn = P_RESPAWN_TICKS;
+  }
+  // else: out of lives with nobody up -> run layer sees allDead status below
 }
 
 // ---------------------------------------------------------------- bubbles
@@ -783,6 +821,35 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepSpecialsAndZones(sim);
   if (sim.boss) stepBoss(sim);
   stepRevenuer(sim);
+
+  // Party wipe: nobody left standing to pop a ghost, so every ghost pays the
+  // life a partner save would have spared and regenerates right where it
+  // drifted. (A lone ghost stays free — see hurtPlayer.)
+  if (!sim.players.some((p) => p.alive) && sim.players.some((p) => p.ghost)) {
+    for (const p of sim.players) {
+      if (!p.ghost) continue;
+      const g = p.ghost;
+      p.ghost = null;
+      p.livesLeft--;
+      sim.deaths.push(p.index);
+      if (p.livesLeft > 0) {
+        p.alive = true;
+        p.x = Math.min(Math.max(g.x, 30), FIELD_W - 30);
+        p.y = Math.min(Math.max(g.y, 60), FIELD_H - 40);
+        p.vx = 0;
+        p.vy = 0;
+        p.invuln = P_INVULN_TICKS;
+        p.anim = "idle";
+      } else {
+        p.spectating = true;
+      }
+    }
+    if (sim.players.some((p) => p.alive)) {
+      emit(sim, { t: "sfx", name: "revive" });
+      emit(sim, { t: "burst", text: "BORN AGAIN!", x: FIELD_W / 2, y: 160, big: true });
+      emit(sim, { t: "shake", power: 4 });
+    }
+  }
 
   const anyAlive = sim.players.some((p) => p.alive || p.ghost || p.respawnIn > 0);
   if (!anyAlive) {

@@ -55,6 +55,15 @@ export const FLING_VX = 7.5;
 export const FLING_VY = -6.5;
 export const FLING_TICKS = 70;
 
+// --- player-vs-player head bounce ---
+/** Kill switch: jump off yer partner's head. Flip to false to remove the
+ *  whole mechanic — every other PVP_BOUNCE_* constant is inert without it. */
+export const PVP_BOUNCE = true;
+export const PVP_BOUNCE_VY = -14.0; // springboard off a head: ~7.6 tiles
+export const PVP_BOUNCE_LAUNCH_TICKS = 20; // rise immune to the jump-release cut
+export const PVP_SQUASH_TICKS = 30; // the landed-on player's knees buckle
+export const PVP_SQUASH_JUMP_MULT = 0.45; // squashed jump strength
+
 // --- bubbles ---
 export const BUBBLE_R = 15;
 export const BUBBLE_LAUNCH_SPEED = 5.2;

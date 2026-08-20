@@ -61,6 +61,11 @@ export type PlayerState = {
   hookCooldown: number;
   /** ticks of post-release momentum during which a fast body still kicks enemies */
   hookKick: number;
+  // PVP head bounce (see PVP_BOUNCE): both fields stay 0 with the flag off
+  /** ticks a head-bounce launch ignores the jump-release height cut */
+  pvpLaunch: number;
+  /** ticks of buckled knees after a partner bounced off this head */
+  squash: number;
   // presentation hints
   anim: string;
   animLock: number;
@@ -328,4 +333,6 @@ export type Sim = {
   shrineTaken: { player: 0 | 1; gift: ShrineGift } | null;
 };
 
-export type SimInputs = [number, number]; // InputCommand per player
+/** InputCommand per player, indexed by PlayerState.index. Length 2 today;
+ *  kept open-ended so a 4-player mode only widens the array. */
+export type SimInputs = number[];
