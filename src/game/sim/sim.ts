@@ -37,6 +37,8 @@ import {
   P_GRAVITY,
   P_HEIGHT,
   P_INVULN_TICKS,
+  GLIDE_AIR_CONTROL,
+  GLIDE_FALL_VY,
   P_JUMP_CUT_VY,
   P_JUMP_VY,
   P_MAX_FALL,
@@ -49,6 +51,14 @@ import {
   PVP_SQUASH_JUMP_MULT,
   PVP_SQUASH_TICKS,
   SCORE_POP_BASE,
+  SECOND_POUR_BEAT_TICKS,
+  SECOND_POUR_HURRY_PUSH,
+  SECOND_POUR_JAR_RETRY,
+  SECOND_POUR_MAX,
+  SECOND_POUR_MULT,
+  SECOND_POUR_SHARED_JAR,
+  SECOND_POUR_STREAM_GAP,
+  SECOND_POUR_TELEGRAPH_TICKS,
   SPECIAL_FIRST_TICKS,
   SPECIAL_INTERVAL_TICKS,
   TICK_HZ,
@@ -69,6 +79,7 @@ import type {
   Item,
   Loadout,
   PlayerState,
+  PourState,
   ShrineGift,
   Sim,
   SimInputs,
@@ -78,7 +89,8 @@ import { stepWeapons } from "./weapons";
 import { spawnSpecial, stepSpecialsAndZones } from "./specials";
 import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
-import { applyHookConstraint, stepHookBody, stepHookControl } from "./hook";
+import { applyHookConstraint, castLine, stepHookBody, stepHookControl } from "./hook";
+import { fireAirSpecial } from "./airspecials";
 import { createShrine, nagShrine, shrineHoldsLevel, stepShrine } from "./shrine";
 
 export type SimPlayerConfig = {
@@ -127,6 +139,9 @@ export function createSim(cfg: SimConfig): Sim {
       grounded: false,
       coyote: 0,
       jumpBuffer: 0,
+      airJumpUsed: false,
+      flutterTicks: 0,
+      gliding: false,
       jumpHeld: false,
       blowHeld: false,
       blowCooldown: 0,
@@ -175,6 +190,11 @@ export function createSim(cfg: SimConfig): Sim {
     hog: { active: false, x: 0, y: 0, vx: 0, facing: 1, ticks: 0 },
     boss: cfg.isBoss ? createBoss(cfg.world.bossId, cfg.world.bossName) : null,
     revenuer: { active: false, x: -60, y: 60, vx: 0, vy: 0 },
+    hurryTick: cfg.levelDef.hurryTicks ?? HURRY_UP_TICKS,
+    pour:
+      cfg.levelDef.secondPour && !cfg.isBoss
+        ? { phase: "armed", ticks: 0, queue: [], jarRetry: 0 }
+        : null,
     nextId: 1,
     nextJarTick: Math.floor(JAR_INTERVAL_TICKS * (0.5 + rng() * 0.5)),
     nextSpecialTick: Math.floor(SPECIAL_FIRST_TICKS * (0.8 + rng() * 0.6)),
@@ -271,13 +291,19 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   const speedMult = p.loadout.tonics.includes("rocketfuel") ? 1.18 : 1;
   const maxSpeed = p.maxSpeed * speedMult;
 
-  // Fishin' Line: cast / reel / let go (Buford)
-  if (castById(p.castId).hook) stepHookControl(sim, p, cmd, prevCmd);
+  // Fishin' Line: reel / swing / let go (Buford). Casting happens below, on
+  // the air-special press.
+  const airSpecial = castById(p.castId).airSpecial;
+  if (airSpecial === "hook") stepHookControl(sim, p, cmd);
   const swinging = p.hook !== null && p.hook.kind === "hold";
 
   // horizontal. On the line you pump harder; off it, a launch past maxSpeed
   // is kept (and bled off only on the ground) instead of clipped.
-  const accel = p.grounded ? P_ACCEL : P_ACCEL * (swinging ? 0.8 : P_AIR_CONTROL);
+  // the possum chute steers on a dime (p.gliding is last tick's state:
+  // fine — the chute opens and closes on whole-fall timescales)
+  const accel = p.grounded
+    ? P_ACCEL
+    : P_ACCEL * (swinging ? 0.8 : p.gliding ? GLIDE_AIR_CONTROL : P_AIR_CONTROL);
   if (left && !right) {
     p.vx = p.vx <= -maxSpeed ? p.vx : Math.max(p.vx - accel, -maxSpeed);
     p.facing = -1;
@@ -295,8 +321,10 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   // jump buffering + coyote
   if (jumpPressed) p.jumpBuffer = JUMP_BUFFER_TICKS;
   else if (p.jumpBuffer > 0) p.jumpBuffer--;
-  if (p.grounded) p.coyote = COYOTE_TICKS;
-  else if (p.coyote > 0) p.coyote--;
+  if (p.grounded) {
+    p.coyote = COYOTE_TICKS;
+    p.airJumpUsed = false;
+  } else if (p.coyote > 0) p.coyote--;
 
   if (p.jumpBuffer > 0 && p.coyote > 0) {
     p.vy = p.jumpVy * (p.squash > 0 ? PVP_SQUASH_JUMP_MULT : 1);
@@ -304,6 +332,22 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.coyote = 0;
     p.jumpBuffer = 0;
     emit(sim, { t: "sfx", name: "jump", pitch: 0.95 + sim.rng() * 0.1 });
+  } else if (jumpPressed && !p.grounded && !swinging && p.hookKick <= 0 && p.pvpLaunch <= 0) {
+    // second press in the air: the character's air special
+    if (airSpecial === "hook") {
+      // Buford trades the double jump for a cast; hold to swing, release to
+      // let fly (the rest of the ride lives in stepHookControl)
+      if (!p.hook && p.hookCooldown === 0) {
+        castLine(sim, p);
+        p.jumpBuffer = 0;
+      }
+    } else if (airSpecial !== "glide" && !p.airJumpUsed) {
+      // glide is hold-driven (see the chute clamp below), everything else
+      // is a one-shot burst
+      p.airJumpUsed = true;
+      p.jumpBuffer = 0;
+      fireAirSpecial(sim, p, airSpecial);
+    }
   }
   // variable jump height (a Fishin' Line launch or head bounce is not a
   // jump: leave those be)
@@ -313,6 +357,15 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
 
   // gravity
   p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
+
+  // Darlene's possum chute: hold JUMP on the way down to drift, let go to drop
+  const wasGliding = p.gliding;
+  p.gliding =
+    airSpecial === "glide" && !p.grounded && !swinging && jump && p.vy > 0 && p.pvpLaunch <= 0;
+  if (p.gliding) {
+    p.vy = Math.min(p.vy, GLIDE_FALL_VY);
+    if (!wasGliding) emit(sim, { t: "sfx", name: "possum", pitch: 1.3 });
+  }
 
   // bubble riding/bouncing: check before tile move (bubbles are soft floors)
   if (p.vy > 0 && !swinging) {
@@ -418,6 +471,13 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (p.prayer > 0) p.prayer--;
   if (p.pvpLaunch > 0) p.pvpLaunch--;
   if (p.squash > 0) p.squash--;
+  if (p.flutterTicks > 0) {
+    p.flutterTicks--;
+    // little leg-patter pips while the scramble lasts
+    if (p.flutterTicks % 8 === 4) {
+      emit(sim, { t: "sfx", name: "boingSmall", pitch: 1.5 + (p.flutterTicks % 3) * 0.08 });
+    }
+  }
 
   // frenzy timer
   if (p.frenzy) {
@@ -432,7 +492,8 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (p.animLock > 0) {
     p.animLock--;
   } else if (!p.grounded) {
-    p.anim = "jump";
+    // Merle's flutter: the run cycle scrambled at panic speed, midair
+    p.anim = p.flutterTicks > 0 ? "runfast" : "jump";
   } else if (Math.abs(p.vx) > 0.4) {
     p.anim = "run";
   } else {
@@ -666,6 +727,16 @@ export function popBubble(
 
 // ---------------------------------------------------------------- jars
 
+/** Roll a frenzy weapon index: uniform over the arsenal, but never the one
+ *  frenzied with last time when 2+ are owned (repeats read as "it always
+ *  picks my signature"). */
+function rollFrenzyWeapon(sim: Sim, loadout: Loadout): number {
+  const all = loadout.weapons.map((_, i) => i);
+  const fresh = all.filter((i) => loadout.weapons[i].id !== loadout.lastFrenzy);
+  const pool = fresh.length > 0 ? fresh : all;
+  return pool.length > 0 ? pool[rangeInt(sim.rng, 0, pool.length - 1)] : 0;
+}
+
 function stepJars(sim: Sim): void {
   if (sim.tick < sim.nextJarTick) return;
   // guaranteed cadence, biased toward authored jar points
@@ -675,7 +746,7 @@ function stepJars(sim: Sim): void {
     if (!p.alive || p.loadout.weapons.length === 0) continue;
     const luckBonus = 1 + p.luck * 0.04;
     if (sim.rng() > 0.85 * luckBonus && !sim.isBoss) continue;
-    const wIdx = rangeInt(sim.rng, 0, p.loadout.weapons.length - 1);
+    const wIdx = rollFrenzyWeapon(sim, p.loadout);
     const point =
       sim.level.jarPoints.length > 0
         ? pick(sim.rng, sim.level.jarPoints)
@@ -714,6 +785,9 @@ export function startFrenzy(sim: Sim, p: PlayerState, weaponIdx: number): void {
     level: slot.level,
     ticksLeft: FRENZY_TICKS + bonus,
   };
+  // remembered across levels (shared loadout object) so the next roll —
+  // jar, pour, or Jar o' Lightnin' — picks something else when 2+ owned
+  p.loadout.lastFrenzy = slot.id;
   emit(sim, { t: "sfx", name: "jarGrab" });
   emit(sim, { t: "sfx", name: "frenzyStart" });
   emit(sim, {
@@ -726,12 +800,146 @@ export function startFrenzy(sim: Sim, p: PlayerState, weaponIdx: number): void {
   emit(sim, { t: "balloon", player: p.index, trigger: "frenzy" });
 }
 
+// ------------------------------------------------------------- second pour
+
+function anyEnemiesLeft(sim: Sim): boolean {
+  return sim.enemies.some(
+    (e) => e.phase.kind === "normal" || e.phase.kind === "trapped",
+  );
+}
+
+function spawnPourJar(sim: Sim, p: PlayerState, shared: boolean): void {
+  const point =
+    sim.level.jarPoints.length > 0
+      ? pick(sim.rng, sim.level.jarPoints)
+      : { x: 80 + sim.rng() * (FIELD_W - 160), y: 0 };
+  sim.items.push({
+    id: sim.nextId++,
+    kind: "jar",
+    // per-player jars nudge apart so co-op drops don't stack invisibly
+    x: point.x + (shared ? 0 : p.index === 0 ? -10 : 10),
+    y: Math.max(40, point.y - TILE),
+    vx: 0,
+    vy: 0.4,
+    grounded: false,
+    ttl: 14 * TICK_HZ,
+    data: rollFrenzyWeapon(sim, p.loadout),
+    forPlayer: p.index,
+    shared,
+    value: 0,
+    arcTicks: 0,
+    fromX: 0,
+    fromY: 0,
+    targetX: 0,
+    targetY: 0,
+  });
+  emit(sim, { t: "sfx", name: "jarSpawn" });
+}
+
+/** The still keeps pouring: while the wave is live, any frenzyless player
+ *  without a jar on the field gets a fresh one (missing a jar is a setback,
+ *  never a soft-lock). In shared mode one contested jar serves the party. */
+function refillPourJars(sim: Sim): void {
+  const pour = sim.pour;
+  if (!pour || sim.tick < pour.jarRetry) return;
+  if (pour.phase === "done" && !anyEnemiesLeft(sim)) return;
+  if (SECOND_POUR_SHARED_JAR) {
+    const covered =
+      sim.players.some((p) => p.alive && p.frenzy) ||
+      sim.items.some((it) => it.kind === "jar" && it.shared);
+    const taker = sim.players.find((p) => p.alive && p.loadout.weapons.length > 0);
+    if (covered || !taker) return;
+    spawnPourJar(sim, taker, true);
+    pour.jarRetry = sim.tick + SECOND_POUR_JAR_RETRY;
+    return;
+  }
+  let poured = false;
+  for (const p of sim.players) {
+    if (!p.alive || p.loadout.weapons.length === 0 || p.frenzy) continue;
+    const covered = sim.items.some(
+      (it) => it.kind === "jar" && (it.shared || it.forPlayer === p.index),
+    );
+    if (covered) continue;
+    spawnPourJar(sim, p, false);
+    poured = true;
+  }
+  if (poured) pour.jarRetry = sim.tick + SECOND_POUR_JAR_RETRY;
+}
+
+function stepPour(sim: Sim): void {
+  const pour = sim.pour;
+  if (!pour || sim.status !== "play") return;
+
+  switch (pour.phase) {
+    case "armed": {
+      if (anyEnemiesLeft(sim)) return;
+      // last wave-1 varmint popped: a beat of quiet before the still blows
+      pour.phase = "beat";
+      pour.ticks = SECOND_POUR_BEAT_TICKS;
+      emit(sim, { t: "sfx", name: "hogfat" });
+      return;
+    }
+    case "beat": {
+      pour.ticks--;
+      if (pour.ticks > 0) return;
+      pour.phase = "pouring";
+      // wave 2: the authored roster again, doubled, angry, streaming in
+      const src = sim.level.enemySpawns;
+      const total = Math.min(SECOND_POUR_MAX, src.length * SECOND_POUR_MULT);
+      for (let i = 0; i < total; i++) {
+        const s = src[i % src.length];
+        pour.queue.push({
+          kind: s.kind,
+          x: s.x,
+          y: s.y,
+          at: sim.tick + SECOND_POUR_TELEGRAPH_TICKS + i * SECOND_POUR_STREAM_GAP,
+        });
+      }
+      // the moonshine draws 'em — and pours the courage to fight 'em
+      pour.jarRetry = sim.tick;
+      refillPourJars(sim);
+      // the wave IS the pressure now; the revenuer clears out and waits.
+      // Guarantee at least the push from here, but never pull the deadline
+      // earlier than it already was (a fast wave-1 clear must not hurry it).
+      sim.hurryTick = Math.max(sim.hurryTick, sim.tick + SECOND_POUR_HURRY_PUSH);
+      sim.revenuer.active = false;
+      emit(sim, { t: "sfx", name: "secondPour" });
+      emit(sim, { t: "burst", text: "SECOND POUR!", x: FIELD_W / 2, y: 140, big: true });
+      emit(sim, { t: "shake", power: 5 });
+      return;
+    }
+    case "pouring": {
+      const remaining: PourState["queue"] = [];
+      for (const q of pour.queue) {
+        if (sim.tick === q.at - SECOND_POUR_TELEGRAPH_TICKS) {
+          emit(sim, { t: "burst", text: "!", x: q.x, y: q.y - 30 });
+        }
+        if (sim.tick >= q.at) {
+          const e = spawnEnemy(sim, q.kind, q.x, q.y);
+          e.angry = true;
+          sim.enemies.push(e);
+          emit(sim, { t: "sfx", name: "escape", pitch: 0.8 + sim.rng() * 0.3 });
+        } else {
+          remaining.push(q);
+        }
+      }
+      pour.queue = remaining;
+      if (pour.queue.length === 0) pour.phase = "done";
+      refillPourJars(sim);
+      return;
+    }
+    case "done":
+      refillPourJars(sim);
+      return;
+  }
+}
+
 // ---------------------------------------------------------------- revenuer
 
 function stepRevenuer(sim: Sim): void {
   const r = sim.revenuer;
   if (!r.active) {
-    if (sim.tick === HURRY_UP_TICKS && sim.status === "play" && !sim.isBoss) {
+    if (sim.tick >= sim.hurryTick && sim.status === "play" && !sim.isBoss) {
       r.active = true;
       r.x = -40;
       r.y = 80;
@@ -752,7 +960,7 @@ function stepRevenuer(sim: Sim): void {
     }
   }
   if (!target) return;
-  const speed = 1.45 + Math.min(0.9, (sim.tick - HURRY_UP_TICKS) / (30 * TICK_HZ));
+  const speed = 1.45 + Math.min(0.9, (sim.tick - sim.hurryTick) / (30 * TICK_HZ));
   const dx = target.x - r.x;
   const dy = target.y - P_HEIGHT / 2 - r.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -787,7 +995,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
       for (const p of sim.players) {
         if (!p.headStart || !p.alive || p.loadout.weapons.length === 0) continue;
         p.headStart = false;
-        startFrenzy(sim, p, rangeInt(sim.rng, 0, p.loadout.weapons.length - 1));
+        startFrenzy(sim, p, rollFrenzyWeapon(sim, p.loadout));
       }
     }
     return;
@@ -810,6 +1018,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepWeapons(sim);
   stepItems(sim);
   stepJars(sim);
+  stepPour(sim);
   stepShrine(sim);
 
   // specials cadence (never on boss levels' final phase; still fun mid-boss)
@@ -866,10 +1075,13 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
     const enemiesLeft = sim.enemies.some(
       (e) => e.phase.kind === "normal" || e.phase.kind === "trapped",
     );
+    // Second Pour holds the level open: the beat, the stream, and any wave-2
+    // survivors all have to resolve before "cleared".
+    const pourHolds = sim.pour !== null && sim.pour.phase !== "done";
     if (!enemiesLeft && sim.status === "play" && shrineHoldsLevel(sim)) {
       // varmints gone, prize unclaimed: hold the level open and point at it
       nagShrine(sim);
-    } else if (!enemiesLeft && sim.status === "play") {
+    } else if (!enemiesLeft && sim.status === "play" && !pourHolds) {
       sim.status = "cleared";
       sim.statusTicks = LEVEL_CLEAR_TICKS;
       sim.revenuer.active = false;

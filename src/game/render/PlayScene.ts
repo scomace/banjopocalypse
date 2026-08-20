@@ -212,6 +212,15 @@ export class PlayScene extends Phaser.Scene {
       s.setOrigin(baked.anchorX / baked.frameW, baked.groundY / baked.frameH);
       s.setPosition(Math.round(p.x), Math.round(p.y));
       s.setFlipX(p.facing === 1); // baked art faces left
+      // body language: hang along the line while swinging (Tarzan lean),
+      // or Merle's flutter lean, Luigi-style
+      const hold = p.hook?.kind === "hold" ? p.hook : null;
+      if (hold) {
+        const lean = -Math.atan2(p.x - hold.ax, p.y - hold.ay) * (180 / Math.PI) * 0.85;
+        s.setAngle(Math.max(-32, Math.min(32, lean)));
+      } else {
+        s.setAngle(p.flutterTicks > 0 ? p.facing * 13 : 0);
+      }
       const animKey = `${texKey}:${p.anim}`;
       if (s.anims.currentAnim?.key !== animKey && this.anims.exists(animKey)) {
         s.play(animKey);
@@ -225,6 +234,20 @@ export class PlayScene extends Phaser.Scene {
         s.setTint(0xffe080);
       } else {
         s.clearTint();
+      }
+      // Darlene's possum chute: a stretched possum swaying overhead
+      if (p.gliding) {
+        const chuteSpr = MISC_CRITTERS.possum;
+        if (chuteSpr) {
+          const c = this.obtain(`pchute${p.index}`, "m:possum#0", 51);
+          c.setTexture(pixelFrameKey("m:possum", t, chuteSpr.frames.length, 16));
+          c.setScale(2.7, 1.7); // stretched out like a glider, bless him
+          c.setOrigin(0.5, 0.5);
+          c.setPosition(Math.round(p.x), Math.round(p.y - baked.frameH * 0.98));
+          c.setFlipX(p.facing === 1);
+          c.setAngle(Math.sin(t / 9) * 8);
+          c.setAlpha(1);
+        }
       }
     }
 
@@ -519,8 +542,19 @@ export class PlayScene extends Phaser.Scene {
     for (const p of sim.players) {
       if (!p.alive || !p.hook) continue;
       const h = p.hook;
-      const hx = p.x + p.facing * 6;
-      const hy = p.y - 40 * 0.62;
+      let hx = p.x + p.facing * 6;
+      let hy = p.y - 40 * 0.62;
+      if (h.kind === "hold") {
+        // the sprite leans around its feet while swinging (see the player
+        // loop) — swing the hand attachment point with it or the line
+        // overshoots the body
+        const lean = Math.max(-32, Math.min(32, -Math.atan2(p.x - h.ax, p.y - h.ay) * (180 / Math.PI) * 0.85));
+        const rad = (lean * Math.PI) / 180;
+        const ox = p.facing * 6;
+        const oy = -40 * 0.62;
+        hx = p.x + ox * Math.cos(rad) - oy * Math.sin(rad);
+        hy = p.y + ox * Math.sin(rad) + oy * Math.cos(rad);
+      }
       const tipX = h.kind === "hold" ? h.ax : h.x;
       const tipY = h.kind === "hold" ? h.ay : h.y;
       const dx = tipX - hx;
@@ -533,7 +567,25 @@ export class PlayScene extends Phaser.Scene {
       // line: taut while holding, a touch slack otherwise
       this.zoneGfx.lineStyle(h.kind === "hold" ? 2 : 1, 0xf4f0d8, h.kind === "hold" ? 0.95 : 0.7);
       if (h.kind === "hold") {
-        this.zoneGfx.lineBetween(hx, hy, tipX, tipY);
+        // fresh bite: the line twangs — a decaying perpendicular shiver
+        const amp = Math.max(0, 12 - h.ticks) * 0.45 * Math.sin(t * 2.1);
+        if (Math.abs(amp) > 0.3) {
+          const px2 = -dy / d;
+          const py2 = dx / d;
+          this.zoneGfx.beginPath();
+          this.zoneGfx.moveTo(hx, hy);
+          this.zoneGfx.lineTo((hx + tipX) / 2 + px2 * amp, (hy + tipY) / 2 + py2 * amp);
+          this.zoneGfx.lineTo(tipX, tipY);
+          this.zoneGfx.strokePath();
+        } else {
+          this.zoneGfx.lineBetween(hx, hy, tipX, tipY);
+        }
+        // the snag: a quick ring popping off the anchor point
+        if (h.ticks < 9) {
+          this.zoneGfx.lineStyle(3, 0xffd84a, 1 - h.ticks / 9);
+          this.zoneGfx.strokeCircle(tipX, tipY, 5 + h.ticks * 2.4);
+          this.zoneGfx.lineStyle(2, 0xf4f0d8, 0.95);
+        }
       } else {
         const mx = (hx + tipX) / 2;
         const my = (hy + tipY) / 2 + Math.min(18, d * 0.08);

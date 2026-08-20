@@ -14,7 +14,7 @@ import {
   type Settings,
 } from "../game/core/save";
 import { audio } from "../game/audio/engine";
-import { WORLDS } from "../game/levels/worlds";
+import { WORLDS, levelInWorld, worldForLevel } from "../game/levels/worlds";
 
 const P_COLORS = ["#9be8c8", "#f0c880"];
 
@@ -99,7 +99,7 @@ export function TitleScreen({
         </div>
       </div>
       <p className="absolute bottom-4 font-pixel text-[8px] text-white/30">
-        P1: WASD + F/G (H: FISHIN' LINE) · P2: ARROWS + K/L (J: LINE) · GAMEPADS WELCOME · ESC PAUSES
+        P1: WASD + F/G · P2: ARROWS + K/L · JUMP AGAIN MIDAIR FOR YER SPECIAL · GAMEPADS WELCOME · ESC PAUSES
       </p>
     </div>
   );
@@ -306,7 +306,7 @@ export function ScoresScreen({ onBack }: { onBack: () => void }) {
           </div>
         )}
         {scores.length > 0 && (
-          <div className="grid grid-cols-[1.75rem_3rem_1fr_2.25rem_4.5rem] items-center gap-x-2 gap-y-2 font-pixel text-[10px]">
+          <div className="grid grid-cols-[1.75rem_3rem_1fr_3rem_4.5rem] items-center gap-x-2 gap-y-2 font-pixel text-[10px]">
             {scores.map((s, i) => (
               <Fragment key={i}>
                 <span className="text-white/50">{i + 1}.</span>
@@ -314,7 +314,9 @@ export function ScoresScreen({ onBack }: { onBack: () => void }) {
                 <span className="truncate text-white/70">
                   {castById(s.cast).displayName.toUpperCase()}
                 </span>
-                <span className="text-white/50">L{s.level}</span>
+                <span className="text-white/50">
+                  {worldForLevel(s.level).index}-{levelInWorld(s.level)}
+                </span>
                 <span className="text-right text-white">{s.score.toLocaleString()}</span>
               </Fragment>
             ))}

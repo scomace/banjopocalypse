@@ -15,8 +15,19 @@ export type CastMember = {
   luck: number;
   /** Extra seconds of frenzy duration (Cooter's perk). */
   frenzyBonus?: number;
-  /** Carries the Fishin' Line grapple (Buford's perk). */
-  hook?: boolean;
+  /**
+   * What a second JUMP press does in the air. Absent = the honest standard
+   * double jump (Earl, the baseline everyone learns on).
+   *  - "hook":     Buford casts the Fishin' Line (hold to swing, release to fly)
+   *  - "flutter":  Merle's legally distinct double jump — panic-speed leg
+   *                scramble that keeps his momentum and boosts it
+   *  - "fart":     Granny Mae's bean-powered sideways scoot
+   *  - "jugblast": Cooter belches lit moonshine downward: rocket up, singe below
+   *  - "recoil":   Bobbie Sue fires the scattergun straight down, kick = jump
+   *  - "glide":    Darlene's possum stretches into a chute; hold JUMP to drift
+   *  - "bolt":     Grandpappy Zeke calls lightning strike #7 and rides it up
+   */
+  airSpecial?: "hook" | "flutter" | "fart" | "jugblast" | "recoil" | "glide" | "bolt";
   /** Short perk label for the select screen. */
   perkLabel?: string;
   /** Cleared-world count required before this character unlocks. */
@@ -31,6 +42,7 @@ export const CAST: CastMember[] = [
     bio: "The responsible twin. Plays a mean five-string.",
     signatureWeapon: "twang",
     speed: 3, puff: 3, jump: 3, luck: 3,
+    perkLabel: "HONEST DOUBLE JUMP",
     unlockWorlds: 0,
   },
   {
@@ -40,6 +52,8 @@ export const CAST: CastMember[] = [
     bio: "The other twin. Legally distinct from Earl.",
     signatureWeapon: "jawharp",
     speed: 4, puff: 3, jump: 3, luck: 2,
+    airSpecial: "flutter",
+    perkLabel: "LEGALLY DISTINCT FLUTTER",
     unlockWorlds: 0,
   },
   {
@@ -49,6 +63,8 @@ export const CAST: CastMember[] = [
     bio: "Owns the still. Owns everyone in checkers.",
     signatureWeapon: "goodbook",
     speed: 2, puff: 3, jump: 2, luck: 5,
+    airSpecial: "fart",
+    perkLabel: "BEAN POWER",
     unlockWorlds: 0,
   },
   {
@@ -60,7 +76,8 @@ export const CAST: CastMember[] = [
     signatureWeapon: "jug",
     speed: 3, puff: 2, jump: 3, luck: 3,
     frenzyBonus: 2,
-    perkLabel: "LONG FRENZY",
+    airSpecial: "jugblast",
+    perkLabel: "LONG FRENZY · JUG BLAST",
     unlockWorlds: 0,
   },
   {
@@ -70,6 +87,8 @@ export const CAST: CastMember[] = [
     bio: "County skeet champ, 9 years runnin'.",
     signatureWeapon: "scattergun",
     speed: 4, puff: 4, jump: 2, luck: 2,
+    airSpecial: "recoil",
+    perkLabel: "RECOIL JUMP",
     unlockWorlds: 2,
   },
   {
@@ -79,6 +98,8 @@ export const CAST: CastMember[] = [
     bio: "Talks to possums. They talk back.",
     signatureWeapon: "possum",
     speed: 3, puff: 3, jump: 3, luck: 4,
+    airSpecial: "glide",
+    perkLabel: "POSSUM CHUTE",
     unlockWorlds: 4,
   },
   {
@@ -88,7 +109,7 @@ export const CAST: CastMember[] = [
     bio: "Once jumped the crick. The wide part.",
     signatureWeapon: "washboard",
     speed: 2, puff: 2, jump: 5, luck: 3,
-    hook: true,
+    airSpecial: "hook",
     perkLabel: "FISHIN' LINE",
     // Was 6; opened up so the Fishin' Line can be play-tested from a fresh save.
     unlockWorlds: 0,
@@ -100,6 +121,8 @@ export const CAST: CastMember[] = [
     bio: "Struck by lightning 6 times. Likes it.",
     signatureWeapon: "lightnin",
     speed: 2, puff: 5, jump: 2, luck: 3,
+    airSpecial: "bolt",
+    perkLabel: "SEVENTH STRIKE",
     unlockWorlds: 8,
   },
 ];

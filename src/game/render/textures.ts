@@ -39,6 +39,22 @@ export function registerBaked(
       repeat: info.loop ? -1 : 0,
     });
   }
+  // Merle's flutter-kick: the run cycle at panic speed, played midair
+  // (sim anim name "runfast"; see airSpecial "flutter")
+  const run = baked.clips.run;
+  if (run) {
+    const fkey = `${key}:runfast`;
+    if (scene.anims.exists(fkey)) scene.anims.remove(fkey);
+    scene.anims.create({
+      key: fkey,
+      frames: Array.from({ length: run.count }, (_, i) => ({
+        key,
+        frame: String(run.start + i),
+      })),
+      frameRate: 30,
+      repeat: -1,
+    });
+  }
 }
 
 export function registerPixel(

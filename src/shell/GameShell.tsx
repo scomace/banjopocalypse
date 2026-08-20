@@ -57,10 +57,6 @@ export function GameShell() {
   const [state, setState] = useState<ShellState>(
     () => quickstartState() ?? onlineState() ?? { screen: "title" },
   );
-  const [lastRun, setLastRun] = useState<{ castIds: (string | null)[]; level: number }>({
-    castIds: ["earl", null],
-    level: 1,
-  });
 
   switch (state.screen) {
     case "game":
@@ -70,7 +66,7 @@ export function GameShell() {
           startLevel={state.startLevel}
           seed={state.seed}
           net={state.net}
-          onExit={({ won, scores }) => {
+          onExit={({ won, scores, level }) => {
             state.net?.client.close();
             if (won) markVictory(false);
             const best = Math.max(...scores, 0);
@@ -81,7 +77,8 @@ export function GameShell() {
                 screen: "initials",
                 score: best,
                 castId,
-                level: lastRun.level,
+                // the level the run REACHED, not where it started
+                level,
               });
             } else {
               setState({ screen: "title" });
@@ -109,7 +106,6 @@ export function GameShell() {
       return (
         <WorldSelectScreen
           onPick={(startLevel) => {
-            setLastRun({ castIds: state.castIds, level: startLevel });
             setState({
               screen: "game",
               castIds: state.castIds,

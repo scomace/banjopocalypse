@@ -1,14 +1,15 @@
-// Buford's Fishin' Line: the cast's one grapple. Press HOOK to cast a line
-// up-and-forward; it bites the first platform/wall it reaches and goes taut.
-// Hold to swing (the reel shortens the line as you go), release to let fly
-// with your momentum, or tap JUMP for a bonus hop off the line. A hook that
-// meets a varmint on the way out yanks it off its feet and sends it tumbling,
-// and a fast swing's boots do the same. Flung varmints are harmless while
-// airborne, bowl over kin they land on, and can still be bubbled mid-tumble.
+// Buford's Fishin' Line: the cast's one grapple, and his air special — press
+// JUMP again in the air to cast a line up-and-forward (sim.ts owns that
+// dispatch and calls castLine); it bites the first platform/wall it reaches
+// and goes taut. Keep JUMP held to swing (the reel shortens the line as you
+// go), release to let fly with your momentum. A hook that meets a varmint on
+// the way out yanks it off its feet and sends it tumbling, and a fast
+// swing's boots do the same. Flung varmints are harmless while airborne,
+// bowl over kin they land on, and can still be bubbled mid-tumble.
 //
 // Pure sim: no Phaser, no DOM. Rendering reads PlayerState.hook.
 
-import { CMD_HOOK, CMD_JUMP } from "../core/input";
+import { CMD_JUMP } from "../core/input";
 import {
   E_GRAVITY,
   E_MAX_FALL,
@@ -84,7 +85,8 @@ function findAnchor(
   return best;
 }
 
-function castLine(sim: Sim, p: PlayerState): void {
+/** Fire the line. sim.ts calls this on Buford's air-special press. */
+export function castLine(sim: Sim, p: PlayerState): void {
   const hx = handX(p);
   const hy = handY(p);
   const target = findAnchor(sim, hx, hy, p.facing);
@@ -108,6 +110,9 @@ function castLine(sim: Sim, p: PlayerState): void {
     ty: target ? target.y : null,
     dist: 0,
   };
+  // the throw clip doubles as a cast fling
+  p.anim = "blow";
+  p.animLock = 10;
   emit(sim, { t: "sfx", name: "castLine", pitch: 0.95 + sim.rng() * 0.1 });
 }
 
@@ -177,20 +182,16 @@ function flingPartner(sim: Sim, p: PlayerState, q: PlayerState, hx: number, hy: 
   emit(sim, { t: "burst", text: "HEAVE!", x: q.x, y: q.y - P_HEIGHT - 12 });
 }
 
-/** The cast / fly / retract / swing-control half. Runs at the top of stepPlayer. */
-export function stepHookControl(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): void {
+/** The fly / retract / swing-control half. Runs at the top of stepPlayer;
+ *  the line rides the JUMP button (cast on the air press, hold to swing). */
+export function stepHookControl(sim: Sim, p: PlayerState, cmd: number): void {
   if (p.hookCooldown > 0) p.hookCooldown--;
   if (p.hookKick > 0) p.hookKick--;
 
-  const held = (cmd & CMD_HOOK) !== 0;
-  const pressed = held && !(prevCmd & CMD_HOOK);
-  const jumpPressed = (cmd & CMD_JUMP) !== 0 && !(prevCmd & CMD_JUMP);
+  const held = (cmd & CMD_JUMP) !== 0;
 
   const h = p.hook;
-  if (!h) {
-    if (pressed && p.hookCooldown === 0) castLine(sim, p);
-    return;
-  }
+  if (!h) return;
 
   if (h.kind === "fly") {
     // bite a varmint on the way out?
@@ -275,14 +276,11 @@ export function stepHookControl(sim: Sim, p: PlayerState, cmd: number, prevCmd: 
     return;
   }
 
-  // hold: swinging
+  // hold: swinging. Releasing JUMP is the only way off (momentum kept); the
+  // old dedicated hop-off button retired with the second binding.
   h.ticks++;
   if (!held) {
     letGo(sim, p, false);
-    return;
-  }
-  if (jumpPressed) {
-    letGo(sim, p, true);
     return;
   }
   h.len = Math.max(HOOK_MIN_LEN, h.len - HOOK_REEL);

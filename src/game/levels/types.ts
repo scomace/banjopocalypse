@@ -45,6 +45,10 @@ export type LevelDef = {
   enemies: Partial<Record<"a" | "b" | "c" | "d", EnemyKind>>;
   /** Optional per-level hurry-up override (ticks). */
   hurryTicks?: number;
+  /** Second Pour level: clearing wave 1 drops jars and pours in an angry
+   *  wave 2. Defaults on for levels 3/7/10 of each world (see getLevelDef);
+   *  set explicitly to force it on or off for this def. */
+  secondPour?: boolean;
 };
 
 export type WorldDef = {

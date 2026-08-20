@@ -28,6 +28,43 @@ export const P_GRAVITY = 0.4;
 export const P_MAX_FALL = 8.5;
 /** Releasing jump cuts the rise to this — a tap is a ~1 tile hop. */
 export const P_JUMP_CUT_VY = -5.2;
+// ---- air specials (the second JUMP press midair; see cast.airSpecial) ----
+/**
+ * The default air special: a double jump at this fraction of the character's
+ * jump impulse. Under 1 so the level-audit jump envelope stays authored
+ * around the GROUND jump; the double is a rescue and a style move, not a
+ * taller ladder. The same reasoning caps every burst below: none of them may
+ * out-climb a ground jump.
+ */
+export const P_AIR_JUMP_MULT = 0.88;
+/** Merle's flutter: legally distinct — it keeps his speed and kicks it up.
+ *  Less rise than the honest double, more distance. */
+export const FLUTTER_VY_MULT = 0.8;
+export const FLUTTER_VX_MULT = 1.45; // boost on current speed...
+export const FLUTTER_VX_CAP = 1.6; // ...capped at this x maxSpeed
+export const FLUTTER_ANIM_TICKS = 24; // leg-scramble visual
+/** Granny Mae's bean-powered scoot: sideways blast, token lift, and a
+ *  little green cloud that bowls over whatever was on her tail. */
+export const FART_VX = 7.6;
+export const FART_LIFT_VY = -3.4;
+export const FART_BLAST_R = 48; // varmints this close get flung
+export const FART_CLOUD_W = 52; // lingering stink cloud (skunk zone)
+export const FART_CLOUD_TICKS = 45;
+/** Cooter's jug backblast: he rockets up, the lit jug goes the other way
+ *  and smashes into a real fire pool. His own moonshine burns him too. */
+export const JUGBLAST_VY = -8.6;
+export const JUGBLAST_JUG_VY = 2.4; // dropped jug's initial fall speed
+/** Bobbie Sue's recoil jump: the scattergun kick IS the jump. */
+export const RECOIL_VY = -8.2;
+export const RECOIL_PELLETS = 5;
+/** Darlene's possum chute: fall speed while JUMP is held on the way down,
+ *  and proper steering — the chute turns on a dime (vs P_AIR_CONTROL 0.42). */
+export const GLIDE_FALL_VY = 2.1;
+export const GLIDE_AIR_CONTROL = 0.9;
+/** Grandpappy Zeke's seventh strike: ride the bolt up, zap the yard. */
+export const BOLT_VY = -9.2;
+export const BOLT_RADIUS = 95;
+export const BOLT_DMG = 3;
 /**
  * Feet may rise one tile above the field, then you bonk the sky. Mirrors the
  * FIELD_H + 8 slack the bottom wrap allows. Without it a hook dismount can
@@ -101,6 +138,23 @@ export const FRENZY_TICKS = 20 * TICK_HZ;
 /** Weapon level cap (mirrored by the run layer's MAX_WEAPON_LEVEL). */
 export const WEAPON_LEVEL_CAP = 5;
 export const JAR_INTERVAL_TICKS = 40 * TICK_HZ;
+
+// --- Second Pour: designated levels (3/7/10 of each world by default) refill
+// after wave 1 dies. The last pop draws a quiet beat, then jars drop and an
+// angry wave 2 streams in. Frenzy is the intended answer, bubbles remain a
+// valid (heroic) one.
+export const SECOND_POUR_BEAT_TICKS = 100; // quiet beat between last pop and the alarm
+export const SECOND_POUR_TELEGRAPH_TICKS = 30; // "!" flashes this long before each entry
+export const SECOND_POUR_STREAM_GAP = 14; // ticks between wave-2 entries
+export const SECOND_POUR_MULT = 2; // wave 2 headcount = authored spawns x this
+export const SECOND_POUR_MAX = 12; // wave 2 headcount cap
+export const SECOND_POUR_HURRY_PUSH = 20 * TICK_HZ; // hurry-up deadline reset at the alarm
+export const SECOND_POUR_JAR_RETRY = Math.floor(3.5 * TICK_HZ); // the still keeps pouring
+/** Co-op jar policy at the alarm: false = one jar per player. Flip to true for
+ *  a single contested jar both players can grab (first swig wins) if that
+ *  tension turns out to be funny. */
+export const SECOND_POUR_SHARED_JAR = false;
+
 export const SPECIAL_INTERVAL_TICKS = 12 * TICK_HZ;
 export const SPECIAL_FIRST_TICKS = 4 * TICK_HZ; // first special drifts in early
 export const GHOST_REVIVE_TICKS = 14 * TICK_HZ; // ghost bubble lifetime before re-drift

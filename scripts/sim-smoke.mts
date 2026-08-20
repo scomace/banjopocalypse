@@ -21,7 +21,17 @@ import { WEAPONS } from "../src/game/sim/weapons";
 import { CAST } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
-import { P_HEIGHT, PVP_BOUNCE, PVP_BOUNCE_VY, PVP_FLING, HOOK_SPEED } from "../src/game/sim/constants";
+import {
+  P_HEIGHT,
+  PVP_BOUNCE,
+  PVP_BOUNCE_VY,
+  PVP_FLING,
+  HOOK_SPEED,
+  HURRY_UP_TICKS,
+  SECOND_POUR_MAX,
+  SECOND_POUR_MULT,
+} from "../src/game/sim/constants";
+import { killEnemyByWeapon } from "../src/game/sim/enemies";
 import { ReplayRecorder, verifyReplay } from "../src/game/replay";
 import type { ShrineGift } from "../src/game/sim/types";
 import {
@@ -126,7 +136,8 @@ for (let lvl = 1; lvl <= 99; lvl++) {
   }
 }
 
-// ---- 2b. Buford + Fishin' Line random runs (hook bit held in long bursts) ----
+// ---- 2b. Buford + Fishin' Line random runs (jump held in long bursts:
+// midair presses cast the line, the hold swings it) ----
 console.log("[2b] Buford fishin' line random runs (1500 ticks x 99 levels)");
 for (let lvl = 1; lvl <= 99; lvl++) {
   const sim = mkSim(lvl, [{ id: "washboard", level: 2 }], "buford");
@@ -142,7 +153,7 @@ for (let lvl = 1; lvl <= 99; lvl++) {
         (rng() < 0.4 ? 2 : 0) |
         (rng() < 0.2 ? 4 : 0) |
         (rng() < 0.3 ? 8 : 0) |
-        (hookHold > 0 ? 16 : 0);
+        (hookHold > 0 ? 4 : 0);
       const inputs: [number, number] = [cmd, 0];
       step(sim, inputs, prev);
       prev = inputs;
@@ -268,6 +279,10 @@ for (let w = 1; w <= 9; w++) {
       fail(`level ${lvl}: createSim dropped the shrine`);
       continue;
     }
+    // The random walk is about guardian leashes, not survival — a bot that
+    // burns its 3 lives (double jumps make the walk spicier) must keep
+    // respawning so the claim assertions below still have a live player.
+    sim.players[0].livesLeft = 99;
     const guardians = sim.enemies.filter((e) => e.leash);
     if (guardians.length !== 3) fail(`level ${lvl}: ${guardians.length} guardians, want 3`);
     // guardians stay fenced through a random-input run
@@ -293,6 +308,8 @@ for (let w = 1; w <= 9; w++) {
     for (let t = 0; t < 120; t++) step(sim, [0, 0], [0, 0]);
     if (sim.status !== "play") fail(`level ${lvl}: cleared with the shrine unclaimed (${sim.status})`);
     if (!sim.shrine.nagged) fail(`level ${lvl}: no claim-yer-prize nag`);
+    // the walk can end with the bot mid-respawn; a dead claimant gets no frenzy
+    for (let t = 0; t < 300 && !sim.players[0].alive; t++) step(sim, [0, 0], [0, 0]);
     // claim pedestal 0: jug joins the arsenal at Lv1, frenzy lights with it
     const p = sim.players[0];
     takeShrine(sim, p, 0);
@@ -388,7 +405,7 @@ console.log("[9] determinism replay (99 solo + 9 co-op levels, run twice)");
           (rng() < 0.4 ? 2 : 0) |
           (rng() < 0.3 ? 4 : 0) |
           (rng() < 0.3 ? 8 : 0) |
-          (hookHold > 0 ? 16 : 0),
+          (hookHold > 0 ? 4 : 0),
       );
     }
     return cmds;
@@ -620,6 +637,130 @@ for (const c of CAST) {
   if (!WEAPONS.some((w) => w.id === c.signatureWeapon)) {
     fail(`cast ${c.id} signature weapon ${c.signatureWeapon} unknown`);
   }
+}
+
+// ---- 14. second pour ----
+// Designated levels (3/7/10 per world) refill after wave 1: beat -> alarm +
+// per-player jars -> angry wave 2 streams in -> only then can the level clear.
+{
+  console.log("[14] second pour");
+  for (const [lvl, want] of [
+    [3, true], [7, true], [10, true],
+    [1, false], [5, false], [11, false], [14, true], [99, false],
+  ] as const) {
+    if (!!getLevelDef(lvl).secondPour !== want) {
+      fail(`pour designation: level ${lvl} secondPour should be ${want}`);
+    }
+  }
+
+  const mkLoadout = () => ({ weapons: [{ id: "twang", level: 1 }], tonics: [], evolved: [] });
+  const sim = createSim({
+    seed: 1234,
+    levelDef: getLevelDef(3),
+    world: worldForLevel(3),
+    levelIndex: 3,
+    isBoss: false,
+    players: [
+      { castId: "earl", loadout: mkLoadout(), livesLeft: 3 },
+      { castId: "merle", loadout: mkLoadout(), livesLeft: 3 },
+    ],
+    deathless: false,
+  });
+  const idle = [0, 0];
+  const tickN = (n: number, killAll = false) => {
+    for (let i = 0; i < n; i++) {
+      if (killAll) {
+        for (const e of sim.enemies) {
+          if (e.phase.kind === "normal") killEnemyByWeapon(sim, e, 0, 99);
+        }
+      }
+      step(sim, idle, idle);
+    }
+  };
+
+  if (!sim.pour) fail("pour: level 3 sim has no pour state");
+  const wave1 = sim.enemies.length;
+  tickN(120); // past intro
+  tickN(60, true); // wipe wave 1
+  if (sim.pour && sim.pour.phase !== "beat" && sim.pour.phase !== "pouring") {
+    fail(`pour: wave-1 wipe left phase=${sim.pour.phase}`);
+  }
+  if (sim.status !== "play") fail(`pour: level cleared during the beat (${sim.status})`);
+
+  tickN(120); // beat expires -> alarm
+  const jars = sim.items.filter((it) => it.kind === "jar");
+  if (jars.length !== 2) fail(`pour: co-op alarm dropped ${jars.length} jars, want 2`);
+  if (new Set(jars.map((j) => j.forPlayer)).size !== 2) fail("pour: both jars for one player");
+  // pushed to >= 20s after the alarm and never earlier than the base deadline
+  if (sim.hurryTick < HURRY_UP_TICKS) fail("pour: hurry-up deadline moved earlier");
+  if (sim.hurryTick < sim.tick) fail("pour: hurry-up deadline already expired at the alarm");
+
+  tickN(SECOND_POUR_MAX * 20 + 60); // whole stream enters
+  const wave2 = sim.enemies.filter((e) => e.phase.kind === "normal");
+  const wantWave2 = Math.min(SECOND_POUR_MAX, wave1 * SECOND_POUR_MULT);
+  if (wave2.length !== wantWave2) fail(`pour: wave 2 is ${wave2.length}, want ${wantWave2}`);
+  if (!wave2.every((e) => e.angry)) fail("pour: wave 2 not all angry");
+  if (sim.pour && sim.pour.phase !== "done") fail(`pour: stream done but phase=${sim.pour.phase}`);
+  if (sim.status !== "play") fail("pour: level cleared while wave 2 alive");
+
+  // the still keeps pouring: lose the jars, fresh ones arrive
+  sim.items = sim.items.filter((it) => it.kind !== "jar");
+  tickN(4 * 60);
+  const rejars = sim.items.filter((it) => it.kind === "jar");
+  if (rejars.length !== 2) fail(`pour: jars not re-poured (got ${rejars.length})`);
+
+  tickN(240, true); // wipe wave 2
+  if (sim.status !== "cleared") fail(`pour: wave 2 dead but status=${sim.status}`);
+  console.log("    second pour ok (beat, jars, angry wave 2, re-pour, clear)");
+}
+
+// ---- 15. frenzy no-repeat roll ----
+// With 2+ weapons owned, random frenzy rolls (jars, headstart, pour) never
+// repeat the weapon frenzied with last; with 1 weapon they still fire.
+{
+  console.log("[15] frenzy no-repeat roll");
+  for (let seed = 1; seed <= 30; seed++) {
+    const loadout = {
+      weapons: [{ id: "twang", level: 2 }, { id: "jug", level: 2 }],
+      tonics: [],
+      evolved: [],
+      lastFrenzy: "twang",
+    };
+    const sim = createSim({
+      seed,
+      levelDef: getLevelDef(1),
+      world: worldForLevel(1),
+      levelIndex: 1,
+      isBoss: false,
+      players: [{ castId: "earl", loadout, livesLeft: 3, headStart: true }],
+      deathless: false,
+    });
+    for (let t = 0; t < 95; t++) step(sim, [0, 0], [0, 0]);
+    const w = sim.players[0].frenzy?.weapon;
+    if (w !== "jug") fail(`no-repeat: lastFrenzy=twang rolled ${w} (seed ${seed})`);
+    if (loadout.lastFrenzy !== "jug") fail("no-repeat: startFrenzy did not record lastFrenzy");
+  }
+  // sole weapon: the roll must not dodge itself into silence
+  const solo = {
+    weapons: [{ id: "twang", level: 1 }],
+    tonics: [],
+    evolved: [],
+    lastFrenzy: "twang",
+  };
+  const soloSim = createSim({
+    seed: 7,
+    levelDef: getLevelDef(1),
+    world: worldForLevel(1),
+    levelIndex: 1,
+    isBoss: false,
+    players: [{ castId: "earl", loadout: solo, livesLeft: 3, headStart: true }],
+    deathless: false,
+  });
+  for (let t = 0; t < 95; t++) step(soloSim, [0, 0], [0, 0]);
+  if (soloSim.players[0].frenzy?.weapon !== "twang") {
+    fail("no-repeat: single-weapon arsenal failed to frenzy");
+  }
+  console.log("    no-repeat rolls ok (2-weapon alternation, solo fallback)");
 }
 
 if (failures === 0) {

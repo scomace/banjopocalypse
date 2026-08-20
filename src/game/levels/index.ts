@@ -25,13 +25,20 @@ const ALL: LevelDef[][] = [
   W9_LEVELS,
 ];
 
+/** Second Pour cadence: levels-in-world that refill after wave 1 (never the
+ *  shrine level 5 or the boss level 11). Defs can override via `secondPour`. */
+export const SECOND_POUR_LEVELS_IN_WORLD = [3, 7, 10];
+
 export function getLevelDef(levelIndex1: number): LevelDef {
   const idx = Math.max(1, Math.min(99, levelIndex1));
   const world = worldForLevel(idx);
   const inWorld = (idx - 1) % 11;
   const defs = ALL[world.index - 1];
   const def = defs[Math.min(inWorld, defs.length - 1)];
-  return levelWithWorldDefaults(def, world.defaultEnemies);
+  // Cadence keys off the absolute slot, not the def: short worlds reuse their
+  // last def for several slots and the pour must not leak with it.
+  const secondPour = def.secondPour ?? SECOND_POUR_LEVELS_IN_WORLD.includes(inWorld + 1);
+  return { ...levelWithWorldDefaults(def, world.defaultEnemies), secondPour };
 }
 
 export function levelCountCheck(): { world: number; count: number }[] {

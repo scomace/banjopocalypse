@@ -13,6 +13,10 @@ export type Loadout = {
   weapons: WeaponSlot[];
   tonics: string[];
   evolved: string[]; // weapon ids currently in evolved form
+  /** id of the last weapon frenzied with; random rolls avoid repeating it
+   *  when 2+ are owned. Lives here because the run layer and the sim share
+   *  this object, so the memory survives across levels for free. */
+  lastFrenzy?: string;
 };
 
 /** Buford's Fishin' Line. `fly`: hook sailing out; `hold`: line is taut and
@@ -39,6 +43,12 @@ export type PlayerState = {
   grounded: boolean;
   coyote: number;
   jumpBuffer: number;
+  /** The one-shot air special is spent; wiped every time boots touch ground. */
+  airJumpUsed: boolean;
+  /** Merle's flutter-kick anim countdown (cosmetic, but sim-owned). */
+  flutterTicks: number;
+  /** Darlene's possum chute is open this tick (slow fall; renderer draws it). */
+  gliding: boolean;
   jumpHeld: boolean;
   blowHeld: boolean;
   blowCooldown: number;
@@ -56,7 +66,7 @@ export type PlayerState = {
   hogFatCharge: boolean; // survive one hit this level
   headStart: boolean; // Jar o' Lightnin' card: frenzy as the level opens
   prayer: number; // invincibility glow ticks (special bubble)
-  // Fishin' Line (cast members with `hook`)
+  // Fishin' Line (cast members with airSpecial "hook")
   hook: HookState | null;
   hookCooldown: number;
   /** ticks of post-release momentum during which a fast body still kicks enemies */
@@ -189,6 +199,8 @@ export type Item = {
   data: number;
   /** jar: which player's arsenal indexed (jars are per-player-colored) */
   forPlayer: 0 | 1;
+  /** jar: grabbable by either player (Second Pour single-jar mode) */
+  shared?: boolean;
   /** food: score value */
   value: number;
   /** arc-to-target phase after a pop */
@@ -293,6 +305,18 @@ export type RevenuerState = {
   vy: number;
 };
 
+/** Second Pour: designated levels refill after wave 1 dies.
+ *  armed -> (last wave-1 enemy pops) -> beat (quiet, `ticks` counts down) ->
+ *  pouring (jars drop, queue streams in angry) -> done (normal clear rules). */
+export type PourState = {
+  phase: "armed" | "beat" | "pouring" | "done";
+  ticks: number;
+  /** wave-2 entries: telegraphed, then spawned angry at tick `at` */
+  queue: { kind: EnemyKind; x: number; y: number; at: number }[];
+  /** next tick the still re-pours a jar for a frenzyless player */
+  jarRetry: number;
+};
+
 export type Sim = {
   tick: number;
   rng: Rng;
@@ -313,6 +337,10 @@ export type Sim = {
   hog: HogEntity;
   boss: BossState | null;
   revenuer: RevenuerState;
+  /** tick the revenuer (re)arrives; pushed back when the Second Pour hits */
+  hurryTick: number;
+  /** Second Pour state, null on undesignated levels */
+  pour: PourState | null;
   nextId: number;
   nextJarTick: number;
   nextSpecialTick: number;

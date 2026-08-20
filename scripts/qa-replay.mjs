@@ -19,7 +19,10 @@ for (let i = 0; i < 5; i++) {
   await page.keyboard.press("l");
   await Promise.all([key("f", 250), key("ArrowUp", 250)]);
   await Promise.all([key("a", 300), key("ArrowRight", 300)]);
-  await page.keyboard.press("j"); // buford's hook
+  // buford's line: jump, then press JUMP again midair (held a beat = short swing)
+  await key("k", 120);
+  await page.waitForTimeout(80);
+  await key("k", 400);
 }
 const result = await page.evaluate(() => {
   const c = window.__banjo;

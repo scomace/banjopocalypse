@@ -148,7 +148,8 @@ function stepItem(sim: Sim, it: Item): boolean {
         break;
       }
       case "jar": {
-        if (it.forPlayer !== p.index) continue; // your jar glows your color
+        // your jar glows your color; a shared pour jar is first-come-first-swig
+        if (it.forPlayer !== p.index && !it.shared) continue;
         startFrenzy(sim, p, it.data);
         break;
       }

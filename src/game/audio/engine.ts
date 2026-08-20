@@ -484,6 +484,16 @@ export class JugBandAudio {
         }
         break;
       }
+      case "secondPour": {
+        // still-alarm: three descending banjo stabs over pounding knocks,
+        // capped with a pressure-drop groan
+        for (let i = 0; i < 3; i++) {
+          this.banjo(t + i * 0.14, 64 - i * 5, 0.6, this.sfxBus);
+          this.noise(t + i * 0.14, 0.1, 220, 1, 0.35, "lowpass");
+        }
+        this.tone(t + 0.45, 0.5, 130, "sawtooth", 0.25, { endFreq: 55 });
+        break;
+      }
       case "twang":
         this.banjo(t, 45, 0.7, this.sfxBus);
         this.banjo(t + 0.02, 52, 0.6, this.sfxBus);
