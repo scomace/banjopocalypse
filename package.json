@@ -9,6 +9,8 @@
     "typecheck": "tsc --noEmit",
     "preview": "vite preview",
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=banjopocalypse",
+    "net:dev": "wrangler dev -c server/wrangler.jsonc --port 8787",
+    "net:deploy": "wrangler deploy -c server/wrangler.jsonc",
     "electron:dev": "electron electron/main.cjs"
   },
   "dependencies": {
@@ -19,6 +21,7 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260820.1",
     "@types/node": "^20.17.0",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",

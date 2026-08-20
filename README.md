@@ -37,6 +37,8 @@ load (`src/aachar/baker.ts`).
 - `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)
 - every level is input-recorded; in the browser console `__banjo.verifyLastReplay()` re-runs the last finished level headless and confirms the tick-perfect hash (`__banjo.verifyReplayNow()` mid-level; `__banjo.lastReplay` is the `{config, log}` itself)
 - `node scripts/qa-replay.mjs` browser E2E: real keyboard play, then the page re-simulates its own input log and must hash-match (needs `vite --port 5200`)
+- `npm run net:dev` / `npm run net:deploy` — online room server (`server/`, Cloudflare Worker + one Durable Object per room), live at https://banjopocalypse-net.scomace.workers.dev
+- `node scripts/qa-room.mjs` room protocol QA against `net:dev`; `ROOM_URL=https://banjopocalypse-net.scomace.workers.dev` to test production
 - in a quickstart run: `0` clears the level, `9` forces a frenzy, `8` claims the shrine
 
 ## Ship
