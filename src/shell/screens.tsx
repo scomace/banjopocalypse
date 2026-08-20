@@ -64,10 +64,12 @@ export function MenuButton({
 
 export function TitleScreen({
   onPlay,
+  onOnline,
   onScores,
   onSettings,
 }: {
   onPlay: () => void;
+  onOnline: () => void;
   onScores: () => void;
   onSettings: () => void;
 }) {
@@ -86,6 +88,7 @@ export function TitleScreen({
       </p>
       <div className="mt-4 flex flex-col items-center gap-3">
         <MenuButton onClick={onPlay}>Play</MenuButton>
+        <MenuButton onClick={onOnline}>Play Online</MenuButton>
         <div className="flex gap-6">
           <MenuButton subtle onClick={onScores}>
             HIGH SCORES
@@ -104,7 +107,7 @@ export function TitleScreen({
 
 // ------------------------------------------------------------ char select
 
-function CastCard({
+export function CastCard({
   member,
   locked,
   selected,

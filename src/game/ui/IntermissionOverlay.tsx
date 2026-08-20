@@ -32,16 +32,33 @@ const SOLO_KEYS: Record<number, CardKeys> = {
   },
   1: KEYS[1],
 };
+// Online: the whole keyboard drives MY hand, whichever slot I am.
+const NET_KEYS: CardKeys = {
+  left: ["KeyA", "ArrowLeft"],
+  right: ["KeyD", "ArrowRight"],
+  confirm: ["KeyF", "KeyG", "KeyK", "KeyL", "Enter", "Space"],
+  reroll: "KeyS",
+};
+
+/** Online hooks: I only control my own hand; the partner's pick arrives via
+ *  the room (applied by GameHost) and shows up in remotePicked. */
+type NetHooks = {
+  myIdx: number;
+  remotePicked: boolean[];
+  onPick: (card: Card) => void;
+};
 
 export function IntermissionOverlay({
   controller,
   cards,
   solo = false,
+  net,
   onDone,
 }: {
   controller: ControllerLike;
   cards: (Card[] | null)[];
   solo?: boolean;
+  net?: NetHooks;
   onDone: () => void;
 }) {
   const keymap = solo ? SOLO_KEYS : KEYS;
@@ -54,10 +71,15 @@ export function IntermissionOverlay({
   const [dealt, setDealt] = useState(cards);
   const world = worldForLevel(controller.run.levelIndex);
 
+  // online: the partner's lock state comes over the wire
+  const lockedFor = (pi: number): boolean =>
+    locked[pi] || (net ? pi !== net.myIdx && net.remotePicked[pi] : false);
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       for (const pi of activePlayers) {
-        const keys = keymap[pi];
+        if (net && pi !== net.myIdx) continue; // not my hand
+        const keys = net ? NET_KEYS : keymap[pi];
         const hand = dealt[pi];
         if (!hand || locked[pi]) continue;
         if (keys.left.includes(e.code)) {
@@ -66,22 +88,24 @@ export function IntermissionOverlay({
           setCursor((c) => c.map((v, i) => (i === pi ? (v + 1) % hand.length : v)));
         } else if (keys.confirm.includes(e.code)) {
           controller.pickCard(pi, hand[cursor[pi]]);
+          net?.onPick(hand[cursor[pi]]);
           setLocked((l) => l.map((v, i) => (i === pi ? true : v)));
         }
       }
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [activePlayers, cursor, dealt, locked, controller, keymap]);
+  }, [activePlayers, cursor, dealt, locked, controller, keymap, net]);
 
   useEffect(() => {
-    const need = activePlayers.every((pi) => locked[pi]);
+    const need = activePlayers.every((pi) => lockedFor(pi));
     if (need && activePlayers.length > 0) {
       const t = setTimeout(onDone, 550);
       return () => clearTimeout(t);
     }
     if (activePlayers.length === 0) onDone();
-  }, [locked, activePlayers, onDone]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locked, activePlayers, onDone, net?.remotePicked]);
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/85">
@@ -103,7 +127,8 @@ export function IntermissionOverlay({
             <div key={pi}>
               <div className="mb-1 font-pixel text-[10px]" style={{ color: P_COLORS[pi] }}>
                 {castById(pr.castId).displayName.toUpperCase()}
-                {locked[pi] ? " · PICKED!" : ""}
+                {net && pi === net.myIdx ? " (YOU)" : ""}
+                {lockedFor(pi) ? " · PICKED!" : net && pi !== net.myIdx ? " · PICKIN'..." : ""}
               </div>
               <div className="flex gap-3">
                 {hand.map((card, ci) => (
@@ -117,9 +142,10 @@ export function IntermissionOverlay({
                       opacity: locked[pi] && cursor[pi] !== ci ? 0.35 : 1,
                     }}
                     onClick={() => {
-                      if (locked[pi]) return;
+                      if (locked[pi] || (net && pi !== net.myIdx)) return;
                       setCursor((c) => c.map((v, i) => (i === pi ? ci : v)));
                       controller.pickCard(pi, card);
+                      net?.onPick(card);
                       setLocked((l) => l.map((v, i) => (i === pi ? true : v)));
                     }}
                   >
@@ -135,7 +161,7 @@ export function IntermissionOverlay({
                   </div>
                 ))}
               </div>
-              {!locked[pi] && pr.rerollsLeft > 0 && (
+              {!locked[pi] && !net && pr.rerollsLeft > 0 && (
                 <button
                   className="mt-1 font-pixel text-[8px] text-white/40 hover:text-white"
                   onClick={() => {

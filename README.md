@@ -39,6 +39,8 @@ load (`src/aachar/baker.ts`).
 - `node scripts/qa-replay.mjs` browser E2E: real keyboard play, then the page re-simulates its own input log and must hash-match (needs `vite --port 5200`)
 - `npm run net:dev` / `npm run net:deploy` — online room server (`server/`, Cloudflare Worker + one Durable Object per room), live at https://banjopocalypse-net.scomace.workers.dev
 - `node scripts/qa-room.mjs` room protocol QA against `net:dev`; `ROOM_URL=https://banjopocalypse-net.scomace.workers.dev` to test production
+- online play: title → PLAY ONLINE → host shares the 4-letter code (or the invite link, `?room=CODE`); delay-based lockstep over the room relay, state hashes exchanged every second as a desync canary. `?online=host` / `?online=join&room=CODE` (+`&cast=`) is the QA autopilot; `?net=http://127.0.0.1:8787` points the client at `net:dev`
+- `node scripts/qa-online.mjs` two-browser lockstep E2E: lobby autopilot, live input both ways, tick-600 hashes must match (needs `vite --port 5200`; `QA_NET=` to override the relay)
 - in a quickstart run: `0` clears the level, `9` forces a frenzy, `8` claims the shrine
 
 ## Ship

@@ -8,8 +8,11 @@ import type Phaser from "phaser";
 import { bakeCast, type BakedCharacter } from "../aachar/baker";
 import { castById } from "./cast";
 import { DEFAULT_BINDINGS, InputSampler, SOLO_BINDINGS } from "./core/input";
-import { LocalInputSource } from "./core/inputsource";
+import { LocalInputSource, type InputSource } from "./core/inputsource";
 import { ReplayRecorder, saveLastReplay, verifyReplay, type LevelReplay } from "./replay";
+import { NetworkInputSource } from "./net/netsource";
+import type { NetSession } from "./net/client";
+import { hashSim } from "./sim/hash";
 import { getLevelDef } from "./levels";
 import { isBossLevel, worldForLevel } from "./levels/worlds";
 import { deriveSeed } from "./core/rng";
@@ -51,6 +54,8 @@ export type GameHostProps = {
   castIds: (string | null)[];
   startLevel: number;
   seed: number;
+  /** present = lockstep online session; the sim itself never knows */
+  net?: NetSession;
   onExit: (result: { won: boolean; scores: number[]; level: number }) => void;
 };
 
@@ -228,7 +233,7 @@ class RunController {
   }
 }
 
-export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
+export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const fxRef = useRef<FxOverlayHandle>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
@@ -239,6 +244,13 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
   const pausedRef = useRef(false);
   pausedRef.current = paused || flow.kind !== "playing";
   const [introKey, setIntroKey] = useState(0);
+  // online session state
+  const netSourceRef = useRef<NetworkInputSource | null>(null);
+  const netSeq = useRef(0);
+  const netPicksRef = useRef<(Card | null)[]>([null, null]);
+  const [, bumpNetPicks] = useState(0);
+  const [desyncTick, setDesyncTick] = useState<number | null>(null);
+  const [partnerGone, setPartnerGone] = useState<string | null>(null);
 
   const controller = useMemo(
     () => new RunController(castIds, startLevel, seed),
@@ -248,11 +260,27 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
   // dev observability for headless QA
   (window as unknown as { __banjo?: unknown }).__banjo = controller;
   const solo = castIds.filter(Boolean).length < 2;
+  // online: the local player gets the whole keyboard, whichever slot they are
   const sampler = useMemo(
-    () => new InputSampler(solo ? SOLO_BINDINGS : DEFAULT_BINDINGS),
+    () => new InputSampler(net || solo ? SOLO_BINDINGS : DEFAULT_BINDINGS),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
+
+  /** Sim swaps (next level, continue) must bump the lockstep level sequence
+   *  identically on both clients — always go through these. */
+  const goNextLevel = () => {
+    // reset picks on the way OUT: a fast partner's pick for the intermission
+    // we're entering can arrive moments before our own flow flips
+    netPicksRef.current = [null, null];
+    controller.nextLevel();
+    netSourceRef.current?.newLevel(++netSeq.current);
+  };
+  const doContinue = () => {
+    netPicksRef.current = [null, null];
+    controller.useContinue();
+    netSourceRef.current?.newLevel(++netSeq.current);
+  };
 
   // bake the cast once
   useEffect(() => {
@@ -279,10 +307,21 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
       setFlow(f);
       if (f.kind === "playing" && !f.resume) setIntroKey((k) => k + 1);
     };
+    let source: InputSource;
+    if (net) {
+      const ns = new NetworkInputSource(net.client, sampler, net.myIdx, net.delay);
+      ns.onDesync = (tick) => setDesyncTick(tick);
+      netSourceRef.current = ns;
+      // QA observability
+      (window as unknown as { __banjoNet?: unknown }).__banjoNet = ns;
+      source = ns;
+    } else {
+      source = new LocalInputSource(sampler);
+    }
     const game = createPhaserGame(
       containerRef.current,
       {
-        source: new LocalInputSource(sampler),
+        source,
         getSim: () => controller.sim,
         onFx: (events) => {
           audio.handleFx(events);
@@ -296,6 +335,11 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
         },
         onTick: (inputs) => {
           controller.recordTick(inputs);
+          // desync canary: exchange a full-state hash once a second
+          const ns = netSourceRef.current;
+          if (ns && controller.sim.tick > 0 && controller.sim.tick % 60 === 0) {
+            ns.reportLocalHash(controller.sim.tick, hashSim(controller.sim));
+          }
           controller.tick();
           audio.tickMusic(controller.sim);
         },
@@ -310,13 +354,37 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
       game.destroy(true);
       gameRef.current = null;
       sampler.destroy();
+      netSourceRef.current?.destroy();
+      netSourceRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [baked]);
 
-  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
+  // online: remote card picks, host's continue, partner presence
   useEffect(() => {
-    const dev = new URLSearchParams(window.location.search).has("quickstart");
+    if (!net) return;
+    const un = net.client.on((m) => {
+      if (m.t === "card" && typeof m.player === "number" && m.player !== net.myIdx) {
+        if (!netPicksRef.current[m.player]) {
+          netPicksRef.current[m.player] = m.card as Card;
+          controller.pickCard(m.player, m.card as Card);
+          bumpNetPicks((v) => v + 1);
+        }
+      } else if (m.t === "continue") {
+        doContinue();
+      } else if (m.t === "peer" && m.event === "leave") {
+        setPartnerGone("yer partner headed home");
+      }
+    });
+    net.client.onClosed = (reason) => setPartnerGone(reason || "connection lost");
+    return un;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [net]);
+
+  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
+  // cheats mutate the sim outside the input stream, so they are HARD OFF online
+  useEffect(() => {
+    const dev = new URLSearchParams(window.location.search).has("quickstart") && !net;
     const h = (e: KeyboardEvent) => {
       if (e.code === "Escape" && flow.kind === "playing") setPaused((p) => !p);
       if (!dev) return;
@@ -351,6 +419,7 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [flow.kind, controller]);
 
   const anyPlayers = controller.run.players.some((p) => p !== null);
@@ -379,18 +448,55 @@ export function GameHost({ castIds, startLevel, seed, onExit }: GameHostProps) {
             controller={controller}
             cards={flow.cards}
             solo={solo}
-            onDone={() => controller.nextLevel()}
+            net={
+              net
+                ? {
+                    myIdx: net.myIdx,
+                    remotePicked: netPicksRef.current.map((c) => c !== null),
+                    onPick: (card) => {
+                      netPicksRef.current[net.myIdx] = card;
+                      net.client.send({ t: "card", player: net.myIdx, card });
+                    },
+                  }
+                : undefined
+            }
+            onDone={goNextLevel}
           />
         )}
         {(flow.kind === "continue" || flow.kind === "gameover" || flow.kind === "victory") && (
           <GameOverOverlay
             flow={flow}
             controller={controller}
-            onContinue={() => controller.useContinue()}
+            waitForHost={!!net && net.myIdx !== 0}
+            onContinue={() => {
+              net?.client.send({ t: "continue" });
+              doContinue();
+            }}
             onExit={() =>
               onExit({ won: flow.kind === "victory", scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
             }
           />
+        )}
+        {desyncTick !== null && (
+          <div className="absolute left-0 right-0 top-0 z-50 bg-[#B93A20] py-1 text-center font-pixel text-[9px] text-white">
+            OUT OF SYNC AT TICK {desyncTick} — Y'ALL ARE PLAYIN' DIFFERENT GAMES. RESTART THE ROOM.
+          </div>
+        )}
+        {partnerGone && flow.kind !== "gameover" && flow.kind !== "victory" && (
+          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/85">
+            <div className="font-display text-4xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
+              Partner's gone
+            </div>
+            <div className="font-pixel text-[9px] text-white/60">{partnerGone.toUpperCase()}</div>
+            <button
+              className="border-2 border-[#E8B928] px-6 py-2 font-display text-xl uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
+              onClick={() =>
+                onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
+              }
+            >
+              Back to the Title
+            </button>
+          </div>
         )}
         {paused && flow.kind === "playing" && (
           <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/70">

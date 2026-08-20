@@ -4,6 +4,8 @@
 import { useState } from "react";
 import { GameHost } from "../game/GameHost";
 import { markVictory } from "../game/core/save";
+import type { NetSession } from "../game/net/client";
+import { OnlineScreen } from "./OnlineScreen";
 import {
   InitialsScreen,
   ScoresScreen,
@@ -17,7 +19,8 @@ type ShellState =
   | { screen: "title" }
   | { screen: "select" }
   | { screen: "world"; castIds: (string | null)[] }
-  | { screen: "game"; castIds: (string | null)[]; startLevel: number; seed: number }
+  | { screen: "game"; castIds: (string | null)[]; startLevel: number; seed: number; net?: NetSession }
+  | { screen: "online"; initialCode?: string; auto?: "host" | "join" | null; autoCast?: string }
   | { screen: "initials"; score: number; castId: string; level: number }
   | { screen: "scores" }
   | { screen: "settings" };
@@ -33,9 +36,26 @@ function quickstartState(): ShellState | null {
   };
 }
 
+/** ?room=CODE deep links into the join flow; ?online=host|join is the QA
+ *  autopilot that drives the lobby hands-free. */
+function onlineState(): ShellState | null {
+  const q = new URLSearchParams(window.location.search);
+  const auto = q.get("online");
+  if (auto === "host" || auto === "join") {
+    return {
+      screen: "online",
+      auto,
+      initialCode: q.get("room") ?? undefined,
+      autoCast: q.get("cast") ?? undefined,
+    };
+  }
+  if (q.get("room")) return { screen: "online", initialCode: q.get("room")! };
+  return null;
+}
+
 export function GameShell() {
   const [state, setState] = useState<ShellState>(
-    () => quickstartState() ?? { screen: "title" },
+    () => quickstartState() ?? onlineState() ?? { screen: "title" },
   );
   const [lastRun, setLastRun] = useState<{ castIds: (string | null)[]; level: number }>({
     castIds: ["earl", null],
@@ -49,7 +69,9 @@ export function GameShell() {
           castIds={state.castIds}
           startLevel={state.startLevel}
           seed={state.seed}
+          net={state.net}
           onExit={({ won, scores }) => {
+            state.net?.client.close();
             if (won) markVictory(false);
             const best = Math.max(...scores, 0);
             const bestIdx = scores.indexOf(best);
@@ -98,6 +120,18 @@ export function GameShell() {
           onBack={() => setState({ screen: "select" })}
         />
       );
+    case "online":
+      return (
+        <OnlineScreen
+          initialCode={state.initialCode}
+          auto={state.auto}
+          autoCast={state.autoCast}
+          onStart={(net, seed) =>
+            setState({ screen: "game", castIds: net.castIds, startLevel: 1, seed, net })
+          }
+          onBack={() => setState({ screen: "title" })}
+        />
+      );
     case "scores":
       return <ScoresScreen onBack={() => setState({ screen: "title" })} />;
     case "settings":
@@ -106,6 +140,7 @@ export function GameShell() {
       return (
         <TitleScreen
           onPlay={() => setState({ screen: "select" })}
+          onOnline={() => setState({ screen: "online" })}
           onScores={() => setState({ screen: "scores" })}
           onSettings={() => setState({ screen: "settings" })}
         />

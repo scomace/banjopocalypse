@@ -15,11 +15,14 @@ type ControllerLike = {
 export function GameOverOverlay({
   flow,
   controller,
+  waitForHost = false,
   onContinue,
   onExit,
 }: {
   flow: GameFlow;
   controller: ControllerLike;
+  /** online guest: only the host can spend a continue */
+  waitForHost?: boolean;
   onContinue: () => void;
   onExit: () => void;
 }) {
@@ -39,7 +42,7 @@ export function GameOverOverlay({
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
-      if (isContinue && (e.code === "KeyF" || e.code === "KeyK" || e.code === "Enter")) {
+      if (isContinue && !waitForHost && (e.code === "KeyF" || e.code === "KeyK" || e.code === "Enter")) {
         onContinue();
       }
       if (!isContinue && (e.code === "Enter" || e.code === "Space")) {
@@ -48,7 +51,7 @@ export function GameOverOverlay({
     };
     window.addEventListener("keydown", h);
     return () => window.removeEventListener("keydown", h);
-  }, [isContinue, onContinue, onExit]);
+  }, [isContinue, waitForHost, onContinue, onExit]);
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90">
@@ -64,15 +67,23 @@ export function GameOverOverlay({
             {controller.run.continuesLeft} CONTINUE{controller.run.continuesLeft === 1 ? "" : "S"} LEFT ·
             RESTARTS THIS WORLD · ARSENAL RESETS
           </div>
-          <button
-            className="border-2 border-[#E8B928] px-6 py-2 font-display text-2xl uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
-            onClick={onContinue}
-          >
-            Hit F / K / Enter
-          </button>
-          <button className="font-pixel text-[9px] text-white/40 hover:text-white" onClick={onExit}>
-            let the holler fall
-          </button>
+          {waitForHost ? (
+            <div className="font-pixel text-[10px] text-white/70">
+              WAITIN' ON THE HOST TO SPOT Y'ALL A CONTINUE...
+            </div>
+          ) : (
+            <>
+              <button
+                className="border-2 border-[#E8B928] px-6 py-2 font-display text-2xl uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
+                onClick={onContinue}
+              >
+                Hit F / K / Enter
+              </button>
+              <button className="font-pixel text-[9px] text-white/40 hover:text-white" onClick={onExit}>
+                let the holler fall
+              </button>
+            </>
+          )}
         </>
       ) : (
         <>
