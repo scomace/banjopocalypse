@@ -178,7 +178,9 @@ export const SPR_MOONPIE: PixelSprite = {
   ],
 };
 
-// The mason jar — frenzy pickup. Glows; weapon icon drawn on top in-scene.
+// The mason jar. No longer the in-level frenzy pickup (that's now the weapon
+// icon inside a player-tinted belch-bubble, see PlayScene items); kept for
+// the sprite atlas / shell art.
 export const SPR_JAR: PixelSprite = {
   palette: {
     k: INK,

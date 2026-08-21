@@ -35,7 +35,6 @@ import {
   PROJECTILE_SPRITES,
   SPECIAL_SPRITES,
 } from "./sprites-items";
-import { SPR_JAR } from "./pixelart";
 import { RELIC_ICONS, SPR_PEDESTAL, WEAPON_ICONS, giftIcon } from "./sprites-weapons";
 import { pedestalX } from "../sim/shrine";
 
@@ -94,7 +93,6 @@ export class PlayScene extends Phaser.Scene {
     for (const [key, spr] of Object.entries(SPECIAL_SPRITES)) registerPixel(this, `s:${key}`, spr);
     for (const [key, spr] of Object.entries(PROJECTILE_SPRITES)) registerPixel(this, `p:${key}`, spr);
     for (const [key, spr] of Object.entries(MISC_ITEM_SPRITES)) registerPixel(this, `i:${key}`, spr);
-    registerPixel(this, "i:jar", SPR_JAR);
     registerPixel(this, "i:pedestal", SPR_PEDESTAL);
     for (const [key, spr] of Object.entries(WEAPON_ICONS)) registerPixel(this, `wi:${key}`, spr);
     for (const [key, spr] of Object.entries(RELIC_ICONS)) registerPixel(this, `ri:${key}`, spr);
@@ -444,8 +442,31 @@ export class PlayScene extends Phaser.Scene {
       let tex = "";
       let scale = 2;
       if (it.kind === "food") tex = `f:${FOOD_TIERS[it.data].name}#0`;
-      else if (it.kind === "jar") tex = pixelFrameKey("i:jar", t, 2, 16);
-      else if (it.kind === "life") tex = pixelFrameKey("i:lifejug", t, 2, 16);
+      else if (it.kind === "jar") {
+        // Frenzy pickup: the weapon icon inside your own belch-bubble (gold
+        // when shared), resting where it landed. No jar art; the icon IS the
+        // read. Icon is smaller than the shrine (2.5x) / reveal card (8x).
+        const owner = sim.players.find((p) => p.index === it.forPlayer);
+        const wid = owner?.loadout.weapons[it.data]?.id;
+        const bobJ = Math.sin((t + it.id * 23) / 18) * 2;
+        const cy = it.y - 22 + bobJ;
+        const blink = it.ttl < 120 && t % 12 < 6;
+        const shellKey = it.shared ? "bubble:special" : `bubble:p${it.forPlayer}`;
+        const shell = this.obtain(`itg${it.id}`, shellKey, 41);
+        shell.setTexture(shellKey);
+        shell.setOrigin(0.5, 0.5);
+        shell.setPosition(Math.round(it.x), Math.round(cy));
+        shell.setScale(1.55 + Math.sin(t / 9 + it.id) * 0.06);
+        shell.setAlpha(blink ? 0.35 : 1);
+        if (wid && this.textures.exists(`wi:${wid}#0`)) {
+          const icon = this.obtain(`iti${it.id}`, `wi:${wid}#0`, 43);
+          icon.setOrigin(0.5, 0.5);
+          icon.setScale(1.5);
+          icon.setPosition(Math.round(it.x), Math.round(cy));
+          icon.setAlpha(blink ? 0.4 : 1);
+        }
+        continue;
+      } else if (it.kind === "life") tex = pixelFrameKey("i:lifejug", t, 2, 16);
       else if (it.kind === "letter") tex = "i:letterbubble#0";
       if (!tex || !this.textures.exists(tex.split("#")[0] + "#0")) continue;
       const s = this.obtain(`it${it.id}`, tex, 42);
@@ -456,13 +477,6 @@ export class PlayScene extends Phaser.Scene {
       s.setPosition(Math.round(it.x), Math.round(it.y + bob));
       // expiring blink
       s.setAlpha(it.ttl < 120 && t % 12 < 6 ? 0.4 : 1);
-      if (it.kind === "jar") {
-        const glow = this.obtain(`itg${it.id}`, "bubble:special", 41);
-        glow.setPosition(Math.round(it.x), Math.round(it.y - 10));
-        glow.setScale(1.3 + Math.sin(t / 9) * 0.12);
-        glow.setAlpha(0.5);
-        glow.setTint(it.forPlayer === 0 ? 0x9be8c8 : 0xf0c880);
-      }
       if (it.kind === "letter") {
         const id = `itl${it.id}`;
         this.used.add(id);
