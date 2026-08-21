@@ -1,5 +1,5 @@
 // Texture registration: baked cast sheets, pixel sprites, procedural tile
-// skins per world, belch shells. Everything lands in Phaser's texture
+// skins per world, belch shells, the frenzy prize sphere. Everything lands in Phaser's texture
 // manager under stable keys at boot.
 
 import type Phaser from "phaser";
@@ -194,6 +194,63 @@ export function registerBubbleTextures(scene: Phaser.Scene): void {
     g.fillStyle(0xffffff, 0.35);
     g.fillCircle(R + 5, R + 6.5, 1.4);
     g.generateTexture(key, R * 2, R * 2);
+    g.destroy();
+  }
+}
+
+/**
+ * Frenzy prize textures. The pickup must NOT look like a belch (lumpy fume
+ * blob = player bubble / special), so it is a crisp glossy sphere: ink
+ * outline, colored rim (whose prize), pale glass body, a dark inner disc
+ * the weapon icon sits on, one fat specular highlight. Plus a 4-point
+ * spark for the twinkle loop and a flat ground shadow.
+ */
+export function registerFrenzyTextures(scene: Phaser.Scene): void {
+  const R = 16;
+  const rims: [string, number][] = [
+    ["bubble:frenzy:p0", 0xc4f06a],
+    ["bubble:frenzy:p1", 0xf0b850],
+    ["bubble:frenzy:shared", 0xffd84a],
+  ];
+  for (const [key, rim] of rims) {
+    if (scene.textures.exists(key)) continue;
+    const g = scene.add.graphics();
+    // ink outline
+    g.fillStyle(0x14101c, 1);
+    g.fillCircle(R, R, R - 0.5);
+    // pale glass body
+    g.fillStyle(0xdff6ff, 0.55);
+    g.fillCircle(R, R, R - 2.2);
+    // colored rim ring
+    g.lineStyle(2.4, rim, 1);
+    g.strokeCircle(R, R, R - 3.2);
+    // dark inner disc: the icon reads against this regardless of backdrop
+    g.fillStyle(0x1a1424, 0.78);
+    g.fillCircle(R, R, R - 6);
+    g.lineStyle(1, rim, 0.35);
+    g.strokeCircle(R, R, R - 6);
+    // specular highlight + small echo
+    g.fillStyle(0xffffff, 0.9);
+    g.fillEllipse(R - 6, R - 7.5, 6.5, 3.5);
+    g.fillStyle(0xffffff, 0.5);
+    g.fillCircle(R + 6.5, R + 6.5, 1.6);
+    g.generateTexture(key, R * 2, R * 2);
+    g.destroy();
+  }
+  if (!scene.textures.exists("fx:spark")) {
+    const g = scene.add.graphics();
+    g.fillStyle(0xffffff, 1);
+    g.fillRect(3, 0, 1, 7);
+    g.fillRect(0, 3, 7, 1);
+    g.fillRect(2, 2, 3, 3);
+    g.generateTexture("fx:spark", 7, 7);
+    g.destroy();
+  }
+  if (!scene.textures.exists("fx:shadow")) {
+    const g = scene.add.graphics();
+    g.fillStyle(0x000000, 1);
+    g.fillEllipse(12, 3, 24, 6);
+    g.generateTexture("fx:shadow", 24, 6);
     g.destroy();
   }
 }

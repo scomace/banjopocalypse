@@ -25,6 +25,7 @@ import {
   pixelFrameKey,
   registerBaked,
   registerBubbleTextures,
+  registerFrenzyTextures,
   registerPixel,
   registerWorldTiles,
 } from "./textures";
@@ -86,6 +87,7 @@ export class PlayScene extends Phaser.Scene {
     bg.setDepth(-100);
 
     registerBubbleTextures(this);
+    registerFrenzyTextures(this);
     for (const [key, spr] of Object.entries(CRITTER_SPRITES)) registerPixel(this, `e:${key}`, spr);
     for (const [key, spr] of Object.entries(BOSS_SPRITES)) registerPixel(this, `boss:${key}`, spr);
     for (const [key, spr] of Object.entries(MISC_CRITTERS)) registerPixel(this, `m:${key}`, spr);
@@ -443,20 +445,28 @@ export class PlayScene extends Phaser.Scene {
       let scale = 2;
       if (it.kind === "food") tex = `f:${FOOD_TIERS[it.data].name}#0`;
       else if (it.kind === "jar") {
-        // Frenzy pickup: the weapon icon inside your own belch-bubble (gold
-        // when shared), resting where it landed. No jar art; the icon IS the
-        // read. Icon is smaller than the shrine (2.5x) / reveal card (8x).
+        // Frenzy prize: a glossy sphere (NOT a fume blob, so it never reads
+        // as a belch or a special) resting where it landed, weapon icon on
+        // the dark inner disc, rim = whose (gold when shared), sparks
+        // orbiting. Icon is smaller than the shrine (2.5x) / card (8x).
         const owner = sim.players.find((p) => p.index === it.forPlayer);
         const wid = owner?.loadout.weapons[it.data]?.id;
         const bobJ = Math.sin((t + it.id * 23) / 18) * 2;
-        const cy = it.y - 22 + bobJ;
+        const cy = it.y - 24 + bobJ;
         const blink = it.ttl < 120 && t % 12 < 6;
-        const shellKey = it.shared ? "bubble:special" : `bubble:p${it.forPlayer}`;
+        if (it.grounded) {
+          const sh = this.obtain(`itsh${it.id}`, "fx:shadow", 40);
+          sh.setOrigin(0.5, 0.5);
+          sh.setPosition(Math.round(it.x), Math.round(it.y - 2));
+          sh.setScale(1.2 - bobJ * 0.04, 1);
+          sh.setAlpha(blink ? 0.15 : 0.35);
+        }
+        const shellKey = it.shared ? "bubble:frenzy:shared" : `bubble:frenzy:p${it.forPlayer}`;
         const shell = this.obtain(`itg${it.id}`, shellKey, 41);
         shell.setTexture(shellKey);
         shell.setOrigin(0.5, 0.5);
         shell.setPosition(Math.round(it.x), Math.round(cy));
-        shell.setScale(1.55 + Math.sin(t / 9 + it.id) * 0.06);
+        shell.setScale(1.55 + Math.sin(t / 9 + it.id) * 0.05);
         shell.setAlpha(blink ? 0.35 : 1);
         if (wid && this.textures.exists(`wi:${wid}#0`)) {
           const icon = this.obtain(`iti${it.id}`, `wi:${wid}#0`, 43);
@@ -464,6 +474,18 @@ export class PlayScene extends Phaser.Scene {
           icon.setScale(1.5);
           icon.setPosition(Math.round(it.x), Math.round(cy));
           icon.setAlpha(blink ? 0.4 : 1);
+        }
+        // twinkle loop: three sparks on a tilted orbit, each winking in and
+        // out on its own beat; the far half of the orbit passes behind
+        for (let k = 0; k < 3; k++) {
+          const a = t / 16 + k * ((Math.PI * 2) / 3) + it.id;
+          const tw = Math.max(0, Math.sin(t / 5 + k * 2.1 + it.id));
+          const sp = this.obtain(`itsp${it.id}_${k}`, "fx:spark", 44);
+          sp.setOrigin(0.5, 0.5);
+          sp.setPosition(Math.round(it.x + Math.cos(a) * 27), Math.round(cy - 4 + Math.sin(a) * 9));
+          sp.setScale(0.6 + tw * 1.3);
+          sp.setAlpha(blink ? 0.2 : 0.35 + tw * 0.65);
+          sp.setDepth(Math.sin(a) > 0 ? 44 : 40);
         }
         continue;
       } else if (it.kind === "life") tex = pixelFrameKey("i:lifejug", t, 2, 16);
