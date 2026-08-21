@@ -441,7 +441,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.hicPitch = 0.85 + sim.rng() * 0.35;
     // aim: whatever direction is held (8-way); nothing held = straight ahead
     let ax = left && !right ? -1 : right && !left ? 1 : 0;
-    // (grounded: no puffing into the floor you stand on — down drops out)
+    // (grounded: no puffing into the floor you stand on - down drops out)
     const ay = aimUp && !aimDown ? -1 : aimDown && !aimUp && !p.grounded ? 1 : 0;
     if (ax === 0 && ay === 0) ax = p.facing;
     const alen = Math.hypot(ax, ay);
