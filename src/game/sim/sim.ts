@@ -1,7 +1,7 @@
 // The simulation orchestrator: createSim + step. Deterministic â€” everything
 // flows from (seed, input stream). Presentation reads state + drains fx.
 
-import { CMD_BLOW, CMD_JUMP, CMD_LEFT, CMD_RIGHT } from "../core/input";
+import { CMD_BLOW, CMD_DOWN, CMD_JUMP, CMD_LEFT, CMD_RIGHT, CMD_UP } from "../core/input";
 import { mulberry32, pick, rangeInt } from "../core/rng";
 import type { EnemyKind, LevelDef, ParsedLevel, WorldDef } from "../levels/types";
 import { W_LEFT, W_RIGHT, W_UP } from "../levels/types";
@@ -295,6 +295,8 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   const jump = (cmd & CMD_JUMP) !== 0;
   const jumpPressed = jump && !(prevCmd & CMD_JUMP);
   const blow = (cmd & CMD_BLOW) !== 0;
+  const aimUp = (cmd & CMD_UP) !== 0;
+  const aimDown = (cmd & CMD_DOWN) !== 0;
   const blowPressed = blow && !(prevCmd & CMD_BLOW);
 
   const speedMult = p.loadout.tonics.includes("rocketfuel") ? 1.18 : 1;
@@ -437,13 +439,21 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (blowPressed && p.blowCooldown === 0) {
     p.blowCooldown = BUBBLE_BLOW_COOLDOWN;
     p.hicPitch = 0.85 + sim.rng() * 0.35;
+    // aim: whatever direction is held (8-way); nothing held = straight ahead
+    let ax = left && !right ? -1 : right && !left ? 1 : 0;
+    // (grounded: no puffing into the floor you stand on — down drops out)
+    const ay = aimUp && !aimDown ? -1 : aimDown && !aimUp && !p.grounded ? 1 : 0;
+    if (ax === 0 && ay === 0) ax = p.facing;
+    const alen = Math.hypot(ax, ay);
+    const dx = ax / alen;
+    const dy = ay / alen;
     sim.bubbles.push({
       id: sim.nextId++,
       owner: p.index,
-      x: p.x + p.facing * (P_WIDTH / 2 + BUBBLE_R - 4),
-      y: p.y - P_HEIGHT * 0.62,
-      vx: p.facing * BUBBLE_LAUNCH_SPEED,
-      vy: 0,
+      x: p.x + dx * (P_WIDTH / 2 + BUBBLE_R - 4),
+      y: p.y - P_HEIGHT * 0.62 + dy * (P_HEIGHT / 2 + BUBBLE_R - 4),
+      vx: dx * BUBBLE_LAUNCH_SPEED,
+      vy: dy * BUBBLE_LAUNCH_SPEED,
       state: { kind: "launch", ticks: p.puffTicks },
       age: 0,
       rides: 0,
@@ -591,9 +601,18 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
   if (b.state.kind === "launch") {
     b.state.ticks--;
     b.x += b.vx;
-    // walls end the launch phase early
+    b.y += b.vy;
+    // walls / floors / ceiling end the launch phase early
     const wallAhead =
-      tileAt(sim.level, b.x + Math.sign(b.vx) * (BUBBLE_R - 2), b.y) !== 0;
+      tileAt(
+        sim.level,
+        b.x + Math.sign(b.vx) * (BUBBLE_R - 2),
+        b.y + Math.sign(b.vy) * (BUBBLE_R - 2),
+      ) !== 0 ||
+      b.y < BUBBLE_R + 2 ||
+      b.y > FIELD_H - BUBBLE_R;
+    if (b.y < BUBBLE_R + 2) b.y = BUBBLE_R + 2;
+    if (b.y > FIELD_H - BUBBLE_R) b.y = FIELD_H - BUBBLE_R;
     if (wallAhead || b.state.ticks <= 0) {
       b.state = { kind: "float" };
       b.vx = 0;

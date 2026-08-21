@@ -10,6 +10,9 @@ export const CMD_RIGHT = 2;
  *  from jump edges + its own airborne state — no separate command bit. */
 export const CMD_JUMP = 4;
 export const CMD_BLOW = 8;
+/** Aim bits: bubbles launch toward whatever direction is held (8-way). */
+export const CMD_UP = 16;
+export const CMD_DOWN = 32;
 
 export type InputCommand = number;
 
@@ -160,6 +163,8 @@ export class InputSampler {
     let cmd = 0;
     if (b.left.some((k) => this.keyLive(k))) cmd |= CMD_LEFT;
     if (b.right.some((k) => this.keyLive(k))) cmd |= CMD_RIGHT;
+    if (b.up.some((k) => this.keyLive(k))) cmd |= CMD_UP;
+    if (b.down.some((k) => this.keyLive(k))) cmd |= CMD_DOWN;
     if (b.jump.some((k) => this.keyLive(k))) cmd |= CMD_JUMP;
     if (b.blow.some((k) => this.keyLive(k))) cmd |= CMD_BLOW;
 
@@ -174,6 +179,9 @@ export class InputSampler {
         const ax = pad.axes[0] ?? 0;
         if (ax < -0.35 || pressed(14)) cmd |= CMD_LEFT;
         if (ax > 0.35 || pressed(15)) cmd |= CMD_RIGHT;
+        const ay = pad.axes[1] ?? 0;
+        if (ay < -0.35 || pressed(12)) cmd |= CMD_UP;
+        if (ay > 0.35 || pressed(13)) cmd |= CMD_DOWN;
         if (pressed(0)) cmd |= CMD_JUMP; // A / cross (again in air: special)
         if (pressed(2) || pressed(1)) cmd |= CMD_BLOW; // X/B
       }
