@@ -13,8 +13,8 @@ import {
   TICK_HZ,
   TILE,
 } from "./constants";
-import { circleOverlapsBox, groundAhead, moveBody, standingOnGround, tileAt } from "./physics";
-import { T_PLATFORM, T_SOLID, type ParsedLevel } from "../levels/types";
+import { circleOverlapsBox, groundAhead, isSolidAt, moveBody, standingOnGround, tileAt } from "./physics";
+import { T_PLATFORM, T_SOLID, T_SPIKES, type ParsedLevel } from "../levels/types";
 import type { Enemy, Pet, PlayerState, Projectile, Sim } from "./types";
 import { emit } from "./sim";
 import { killEnemyByWeapon } from "./enemies";
@@ -422,6 +422,14 @@ function hitEnemies(sim: Sim, pr: Projectile, radius: number): number {
   return hits;
 }
 
+// Lobbed projectiles (jug, egg, boinger) land on platforms only when falling
+// onto them; rising through a platform from below passes clean. Straight
+// shots (spit, pellet, enemyshot) ignore platforms entirely via isSolidAt.
+function landsAt(sim: Sim, px: number, py: number, vy: number): boolean {
+  const t = tileAt(sim.level, px, py);
+  return t === T_SOLID || t === T_SPIKES || (t === T_PLATFORM && vy > 0);
+}
+
 function stepProjectile(sim: Sim, pr: Projectile): boolean {
   pr.ticks--;
   if (pr.ticks <= 0) return false;
@@ -473,7 +481,7 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
       pr.vy += 0.28;
       pr.x += pr.vx;
       pr.y += pr.vy;
-      const solid = tileAt(sim.level, pr.x, pr.y) !== 0;
+      const solid = landsAt(sim, pr.x, pr.y, pr.vy);
       if (solid || pr.y > FIELD_H - 4) {
         // smash: fire pool
         const evolved = pr.data === 1;
@@ -498,7 +506,7 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
     case "pellet": {
       pr.x += pr.vx;
       pr.y += pr.vy;
-      if (tileAt(sim.level, pr.x, pr.y) !== 0) return false;
+      if (isSolidAt(sim.level, pr.x, pr.y)) return false;
       if (hitEnemies(sim, pr, 10) > 0) return false;
       return true;
     }
@@ -510,12 +518,12 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
         pr.vx *= -1;
         pr.data--;
       }
-      if (tileAt(sim.level, pr.x, pr.y + 8) !== 0 && pr.vy > 0) {
+      if (landsAt(sim, pr.x, pr.y + 8, pr.vy) && pr.vy > 0) {
         pr.vy = -Math.abs(pr.vy) * 0.95 - 1;
         pr.data--;
         emit(sim, { t: "sfx", name: "boingSmall", pitch: 1 + sim.rng() * 0.4 });
       }
-      if (tileAt(sim.level, pr.x, pr.y - 8) !== 0 && pr.vy < 0) {
+      if (isSolidAt(sim.level, pr.x, pr.y - 8) && pr.vy < 0) {
         pr.vy = Math.abs(pr.vy);
         pr.data--;
       }
@@ -553,7 +561,7 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
     case "egg": {
       pr.vy += 0.3;
       pr.y += pr.vy;
-      if (tileAt(sim.level, pr.x, pr.y) !== 0 || pr.y > FIELD_H) {
+      if (landsAt(sim, pr.x, pr.y, pr.vy) || pr.y > FIELD_H) {
         hitEnemies(sim, pr, 26);
         emit(sim, { t: "sfx", name: "eggPop" });
         return false;
@@ -565,7 +573,7 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
       pr.vy += 0.22;
       pr.x += pr.vx;
       pr.y += pr.vy;
-      if (tileAt(sim.level, pr.x, pr.y) !== 0) return false;
+      if (isSolidAt(sim.level, pr.x, pr.y)) return false;
       const hits = hitEnemies(sim, pr, 11);
       pr.data -= hits;
       return pr.data > 0 && pr.y < FIELD_H + 30;
@@ -622,7 +630,7 @@ function stepProjectile(sim: Sim, pr: Projectile): boolean {
     case "enemyshot": {
       pr.x += pr.vx;
       pr.y += pr.vy;
-      if (tileAt(sim.level, pr.x, pr.y) !== 0) return false;
+      if (isSolidAt(sim.level, pr.x, pr.y)) return false;
       for (const p of sim.players) {
         if (!p.alive || p.invuln > 0 || p.prayer > 0) continue;
         if (circleOverlapsBox(pr.x, pr.y, 8, p.x, p.y, P_WIDTH, P_HEIGHT)) {

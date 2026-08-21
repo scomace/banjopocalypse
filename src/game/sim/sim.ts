@@ -70,6 +70,7 @@ import {
   moveBody,
   standingOnGround,
   tileAt,
+  isSolidAt,
   windAt,
 } from "./physics";
 import { T_SPIKES } from "../levels/types";
@@ -602,13 +603,14 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
     b.state.ticks--;
     b.x += b.vx;
     b.y += b.vy;
-    // walls / floors / ceiling end the launch phase early
+    // walls / floors / ceiling end the launch phase early (platforms don't:
+    // bubbles pass straight through them, Bubble Bobble style)
     const wallAhead =
-      tileAt(
+      isSolidAt(
         sim.level,
         b.x + Math.sign(b.vx) * (BUBBLE_R - 2),
         b.y + Math.sign(b.vy) * (BUBBLE_R - 2),
-      ) !== 0 ||
+      ) ||
       b.y < BUBBLE_R + 2 ||
       b.y > FIELD_H - BUBBLE_R;
     if (b.y < BUBBLE_R + 2) b.y = BUBBLE_R + 2;
@@ -671,10 +673,11 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
     b.x += b.vx + Math.sin((b.age + b.wobblePhase * 60) / 30) * 0.18;
     b.y += b.vy;
 
-    // soft-collide with solids: nudge out
-    if (tileAt(sim.level, b.x - BUBBLE_R, b.y) !== 0) b.x += 1.2;
-    if (tileAt(sim.level, b.x + BUBBLE_R, b.y) !== 0) b.x -= 1.2;
-    if (tileAt(sim.level, b.x, b.y - BUBBLE_R) !== 0) b.y += 1.2;
+    // soft-collide with solids: nudge out (platforms are ignored — a
+    // floating bubble drifts straight up through them)
+    if (isSolidAt(sim.level, b.x - BUBBLE_R, b.y)) b.x += 1.2;
+    if (isSolidAt(sim.level, b.x + BUBBLE_R, b.y)) b.x -= 1.2;
+    if (isSolidAt(sim.level, b.x, b.y - BUBBLE_R)) b.y += 1.2;
     if (b.y < BUBBLE_R + 2) b.y = BUBBLE_R + 2;
 
     // spikes pop bubbles
