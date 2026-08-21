@@ -16,7 +16,7 @@ bass, washboard, devil fiddle).
 - `npm install`
 - `npm run dev` then open the printed URL
 - P1: WASD + F (jump) / G (blow) / H (Fishin' Line, Buford only). P2: arrows + K / L / J. Gamepads supported (Y / RB casts the line).
-- ESC pauses. Swig shine, belch fume-bubbles, trap varmints, pop 'em. Grab glowing mason jars
+- ESC / Start pauses. Every menu is drivable without a mouse: arrows or d-pad move the cursor, Enter / A picks, Esc / B backs out (a TV remote's arrows + OK + Back work the same). Initials and room codes take typed letters OR an up/down letter wheel, mixed freely; a hint bar on each screen names the live buttons for the device in hand. Swig shine, belch fume-bubbles, trap varmints, pop 'em. Grab glowing mason jars
   for 20 seconds of weapon mayhem. Clear all 99 levels and take back
   Granny's still from Ol' Scratch.
 
@@ -38,6 +38,7 @@ load (`src/aachar/baker.ts`).
 - sampled SFX: drop an mp3/wav in `public/sounds/` and register it in `SAMPLE_SFX` (`src/game/audio/engine.ts`); a missing file falls back to synth. `wind-fail.mp3` / `wind-strain.mp3` are the wind slots
 - `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)
 - every level is input-recorded; in the browser console `__banjo.verifyLastReplay()` re-runs the last finished level headless and confirms the tick-perfect hash (`__banjo.verifyReplayNow()` mid-level; `__banjo.lastReplay` is the `{config, log}` itself)
+- `node scripts/qa-menu-nav.mjs [keyboard|pad|both]` pointer-free menu QA: walks every shell screen, the pause menu, the intermission and the initials wheel with keyboard-only (what a remote sends) and with a fake gamepad; fails if any screen needs a mouse (needs `vite --port 5200`)
 - `node scripts/qa-replay.mjs` browser E2E: real keyboard play, then the page re-simulates its own input log and must hash-match (needs `vite --port 5200`)
 - `npm run net:dev` / `npm run net:deploy` — online room server (`server/`, Cloudflare Worker + one Durable Object per room), live at https://banjopocalypse-net.scomace.workers.dev
 - `node scripts/qa-room.mjs` room protocol QA against `net:dev`; `ROOM_URL=https://banjopocalypse-net.scomace.workers.dev` to test production

@@ -3,13 +3,18 @@
 // machines; the host measures RTT and dictates the input delay. Deep link:
 // ?room=CODE joins straight from the title. QA autopilot: ?online=host /
 // ?online=join&room=CODE (+&cast=) drives the lobby hands-free.
+// Pointer-free: the landing is a list, the room code is a LetterEntry (so a
+// remote or pad can spell it), the lobby is a cursor over the cast grid.
 
 import { useEffect, useRef, useState } from "react";
 import { CAST, castUnlocked } from "../game/cast";
 import { loadSave } from "../game/core/save";
 import { audio } from "../game/audio/engine";
 import { delayForRtt, RoomClient, type NetMsg, type NetSession } from "../game/net/client";
+import { CODE_ALPHABET, LetterEntry } from "./LetterEntry";
+import { HintBar } from "./MenuChrome";
 import { CastCard, Marquee, MenuButton } from "./screens";
+import { menuSfx, useMenuNav } from "./useMenuNav";
 
 const P_COLORS = ["#9be8c8", "#f0c880"];
 
@@ -43,7 +48,7 @@ export function OnlineScreen({
   const rerender = () => bump((v) => v + 1);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [joinCode, setJoinCode] = useState(initialCode ?? "");
+  const [mode, setMode] = useState<"menu" | "code">("menu");
   const [copied, setCopied] = useState(false);
 
   const enterLobby = (client: RoomClient) => {
@@ -89,6 +94,7 @@ export function OnlineScreen({
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
+      setMode("code");
     }
   };
 
@@ -112,6 +118,13 @@ export function OnlineScreen({
     const castIds = [l.casts[0], l.casts[1]];
     l.client.send({ t: "start", castIds, delay });
     onStart({ client: l.client, myIdx: l.myIdx, delay, castIds }, l.seed);
+  };
+
+  const leave = () => {
+    const l = lobbyRef.current;
+    l?.client.close();
+    lobbyRef.current = null;
+    onBack();
   };
 
   // deep link / autopilot connect (ref-guarded: StrictMode double-mounts)
@@ -176,36 +189,98 @@ export function OnlineScreen({
     ? { code: l.code, peers: l.peers.length, casts: l.casts, started: started.current }
     : null;
 
+  // ---- landing list: Host / Join / Back
+  const landing = useMenuNav({
+    count: 3,
+    enabled: !l && mode === "menu" && !busy,
+    onAccept: (i) => {
+      if (i === 0) void host();
+      else if (i === 1) setMode("code");
+      else onBack();
+    },
+    onBack,
+  });
+
+  // ---- lobby: cast grid + [Let's Go] (host) + [Leave]
+  const isHost = !!l && l.myIdx === 0;
+  const lobbyCount = CAST.length + (isHost ? 2 : 1);
+  const goIdx = CAST.length;
+  const leaveIdx = isHost ? CAST.length + 1 : CAST.length;
+  const ready = !!l && l.peers.length >= 2 && !!l.casts[0] && !!l.casts[1];
+  const lobby = useMenuNav({
+    count: lobbyCount,
+    cols: 4,
+    enabled: !!l,
+    sfx: false,
+    onMove: () => menuSfx("move"),
+    onAccept: (i) => {
+      if (i < CAST.length) {
+        const m = CAST[i];
+        if (!castUnlocked(m, save)) {
+          menuSfx("nope");
+          return;
+        }
+        pickCast(m.id);
+      } else if (isHost && i === goIdx) {
+        if (ready) {
+          menuSfx("accept");
+          void startGame();
+        } else menuSfx("nope");
+      } else {
+        menuSfx("back");
+        leave();
+      }
+    },
+    onStart: () => {
+      if (isHost && ready) {
+        menuSfx("accept");
+        void startGame();
+      }
+    },
+    onBack: () => {
+      menuSfx("back");
+      leave();
+    },
+  });
+
   if (!l) {
     return (
-      <div className="flex h-screen flex-col items-center justify-center gap-5">
+      <div className="relative flex h-screen flex-col items-center justify-center gap-5">
         <Marquee size="text-5xl" />
         <div className="font-pixel text-[10px] text-white/60">TWO HOLLERS, ONE STILL</div>
         {busy ? (
           <div className="font-pixel text-[10px] text-white/70">reachin' across the county line...</div>
+        ) : mode === "code" ? (
+          <>
+            <div className="font-pixel text-[9px] text-white/50">SPELL THE 4-LETTER ROOM CODE</div>
+            <LetterEntry
+              length={4}
+              initial={initialCode ?? ""}
+              alphabet={CODE_ALPHABET}
+              confirmLabel="JOIN"
+              onConfirm={(code) => void join(code)}
+              onCancel={() => setMode("menu")}
+            />
+          </>
         ) : (
           <>
-            <MenuButton onClick={() => void host()}>Host a Room</MenuButton>
-            <div className="flex items-center gap-2">
-              <input
-                className="w-28 border-2 border-[#5a4a30] bg-black/60 px-2 py-1 text-center font-display text-2xl uppercase tracking-widest text-white outline-none focus:border-[#E8B928]"
-                maxLength={4}
-                placeholder="CODE"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value.toUpperCase().replace(/[^A-Z]/g, ""))}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") void join(joinCode);
-                  e.stopPropagation();
-                }}
-              />
-              <MenuButton onClick={() => void join(joinCode)}>Join</MenuButton>
-            </div>
+            <MenuButton bind={landing.bind(0)}>Host a Room</MenuButton>
+            <MenuButton bind={landing.bind(1)}>Join a Room</MenuButton>
+            <MenuButton subtle bind={landing.bind(2)}>
+              BACK
+            </MenuButton>
           </>
         )}
         {error && <div className="font-pixel text-[9px] text-[#ff7a5c]">{error.toUpperCase()}</div>}
-        <MenuButton subtle onClick={onBack}>
-          BACK
-        </MenuButton>
+        {mode === "menu" && !busy && (
+          <HintBar
+            hints={[
+              { action: "move", label: "MOVE" },
+              { action: "accept", label: "PICK" },
+              { action: "back", label: "BACK" },
+            ]}
+          />
+        )}
       </div>
     );
   }
@@ -218,10 +293,9 @@ export function OnlineScreen({
     if (net) u.searchParams.set("net", net);
     return u.toString();
   })();
-  const ready = l.peers.length >= 2 && !!l.casts[0] && !!l.casts[1];
 
   return (
-    <div className="flex h-screen flex-col items-center justify-center gap-3 overflow-auto py-6">
+    <div className="relative flex h-screen flex-col items-center justify-center gap-3 overflow-auto py-6">
       <div className="font-pixel text-[9px] text-white/50">ROOM CODE</div>
       <div
         className="font-display text-6xl uppercase tracking-[0.3em] text-[#E8B928]"
@@ -231,6 +305,7 @@ export function OnlineScreen({
       </div>
       <button
         className="font-pixel text-[8px] text-white/40 hover:text-white"
+        tabIndex={-1}
         onClick={() => {
           void navigator.clipboard?.writeText(link).then(() => {
             setCopied(true);
@@ -260,37 +335,46 @@ export function OnlineScreen({
       <div className="font-pixel text-[9px] text-white/50">
         {l.peers.length < 2 ? "WAITIN' ON YER PARTNER — SEND 'EM THE CODE" : "PICK YER KINFOLK"}
       </div>
-      <div className="grid max-w-4xl grid-cols-4 gap-3">
-        {CAST.map((m) => (
+      <div className="grid max-w-4xl grid-cols-4 gap-3 pb-2">
+        {CAST.map((m, i) => (
           <CastCard
             key={m.id}
             member={m}
             locked={!castUnlocked(m, save)}
             rescued={save.castRescued.includes(m.id)}
-            selected={l.casts.map((c, i) => (c === m.id ? i : -1)).filter((i) => i >= 0)}
-            onPick={() => pickCast(m.id)}
+            selected={l.casts.map((c, pi) => (c === m.id ? pi : -1)).filter((pi) => pi >= 0)}
+            cursors={lobby.focus === i ? [l.myIdx] : []}
+            bind={lobby.bind(i)}
+            onPick={() => {
+              if (!castUnlocked(m, save)) {
+                menuSfx("nope");
+                return;
+              }
+              pickCast(m.id);
+            }}
           />
         ))}
       </div>
       <div className="flex items-center gap-4">
-        {l.myIdx === 0 ? (
-          <MenuButton onClick={() => void startGame()}>
+        {isHost ? (
+          <MenuButton bind={lobby.bind(goIdx)} className={ready ? "" : "opacity-50"}>
             {ready ? "Let's Go" : "Waitin'..."}
           </MenuButton>
         ) : (
           <div className="font-pixel text-[9px] text-white/50">THE HOST KICKS IT OFF</div>
         )}
-        <MenuButton
-          subtle
-          onClick={() => {
-            l.client.close();
-            lobbyRef.current = null;
-            onBack();
-          }}
-        >
+        <MenuButton subtle bind={lobby.bind(leaveIdx)}>
           LEAVE
         </MenuButton>
       </div>
+      <HintBar
+        hints={[
+          { action: "move", label: "MOVE" },
+          { action: "accept", label: "PICK" },
+          ...(isHost ? [{ action: "start" as const, label: "LET'S GO" }] : []),
+          { action: "back", label: "LEAVE" },
+        ]}
+      />
     </div>
   );
 }

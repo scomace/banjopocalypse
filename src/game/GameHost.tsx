@@ -40,6 +40,10 @@ import { LevelIntroOverlay } from "./ui/LevelIntroOverlay";
 import { WeaponAcquiredOverlay } from "./ui/WeaponAcquiredOverlay";
 import { FxOverlay, type FxOverlayHandle } from "./fx/FxOverlay";
 import { markRescued, saveCheckpoint } from "./core/save";
+import { PauseOverlay } from "./ui/PauseOverlay";
+import { menuInput } from "../shell/menuInput";
+import { MenuButton } from "../shell/screens";
+import { useMenuNav } from "../shell/useMenuNav";
 
 export type GameFlow =
   /** `resume`: back from a mid-level hold (shrine reveal) — no level intro */
@@ -248,6 +252,9 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
   const netSourceRef = useRef<NetworkInputSource | null>(null);
   const netSeq = useRef(0);
   const netPicksRef = useRef<(Card | null)[]>([null, null]);
+  // per slot: where each hand's cursor sits on the intermission cards (mine
+  // so it can be re-sent after a reconnect, the partner's for their strip)
+  const netCursorRef = useRef<(number | null)[]>([null, null]);
   const [, bumpNetPicks] = useState(0);
   const [desyncTick, setDesyncTick] = useState<number | null>(null);
   /** fatal: the session cannot continue (desynced past repair, room gone) */
@@ -279,11 +286,15 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
     // reset picks on the way OUT: a fast partner's pick for the intermission
     // we're entering can arrive moments before our own flow flips
     netPicksRef.current = [null, null];
+    netCursorRef.current = [null, null];
+    sampler.swallowHeld();
     controller.nextLevel();
     netSourceRef.current?.newLevel(++netSeq.current);
   };
   const doContinue = () => {
     netPicksRef.current = [null, null];
+    netCursorRef.current = [null, null];
+    sampler.swallowHeld();
     controller.useContinue();
     netSourceRef.current?.newLevel(++netSeq.current);
   };
@@ -382,6 +393,8 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
     const resendMyPick = () => {
       const mine = netPicksRef.current[net.myIdx];
       if (mine) net.client.send({ t: "card", player: net.myIdx, card: mine });
+      const cur = netCursorRef.current[net.myIdx];
+      if (cur !== null) net.client.send({ t: "cardcursor", player: net.myIdx, idx: cur });
     };
 
     const un = net.client.on((m) => {
@@ -389,6 +402,13 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
         if (!netPicksRef.current[m.player]) {
           netPicksRef.current[m.player] = m.card as Card;
           controller.pickCard(m.player, m.card as Card);
+          bumpNetPicks((v) => v + 1);
+        }
+      } else if (m.t === "cardcursor" && typeof m.player === "number" && m.player !== net.myIdx) {
+        // the partner browsing their hand: only worth a repaint if it moved
+        const idx = typeof m.idx === "number" ? m.idx : null;
+        if (netCursorRef.current[m.player] !== idx) {
+          netCursorRef.current[m.player] = idx;
           bumpNetPicks((v) => v + 1);
         }
       } else if (m.t === "continue") {
@@ -449,12 +469,25 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [net, ready]);
 
-  // pause key + quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
+  // pause: Esc on a keyboard, Start on a pad (the pause menu itself owns
+  // every press while it's up). Overlays closing into play swallow whatever
+  // is still held so the confirming press never reaches the sim.
+  useEffect(() => {
+    return menuInput.subscribe((e) => {
+      if (flow.kind !== "playing" || pausedRef.current) return;
+      if (e.action === "start" || (e.action === "back" && e.code === "Escape")) setPaused(true);
+    });
+  }, [flow.kind]);
+  const resumeFromPause = () => {
+    sampler.swallowHeld();
+    setPaused(false);
+  };
+
+  // quickstart dev cheats (0 = clear level, 9 = frenzy, 8 = claim shrine)
   // cheats mutate the sim outside the input stream, so they are HARD OFF online
   useEffect(() => {
     const dev = new URLSearchParams(window.location.search).has("quickstart") && !net;
     const h = (e: KeyboardEvent) => {
-      if (e.code === "Escape" && flow.kind === "playing") setPaused((p) => !p);
       if (!dev) return;
       const sim = controller.sim;
       if (e.code === "Digit0") {
@@ -508,7 +541,10 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
             player={flow.player}
             castId={controller.run.players[flow.player]?.castId ?? castIds.find(Boolean) ?? "earl"}
             coop={!solo}
-            onDone={() => controller.resume()}
+            onDone={() => {
+              sampler.swallowHeld();
+              controller.resume();
+            }}
           />
         )}
         {flow.kind === "intermission" && (
@@ -520,10 +556,16 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
               net
                 ? {
                     myIdx: net.myIdx,
-                    remotePicked: netPicksRef.current.map((c) => c !== null),
+                    remotePicks: [...netPicksRef.current],
+                    remoteCursor: [...netCursorRef.current],
                     onPick: (card) => {
                       netPicksRef.current[net.myIdx] = card;
                       net.client.send({ t: "card", player: net.myIdx, card });
+                    },
+                    onCursor: (idx) => {
+                      if (netCursorRef.current[net.myIdx] === idx) return;
+                      netCursorRef.current[net.myIdx] = idx;
+                      net.client.send({ t: "cardcursor", player: net.myIdx, idx });
                     },
                   }
                 : undefined
@@ -561,52 +603,34 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
           </div>
         )}
         {netTrouble && !partnerGone && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/75">
-            <div className="font-display text-3xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
-              Hold yer horses
-            </div>
-            <div className="font-pixel text-[9px] text-white/70">{netTrouble.toUpperCase()}...</div>
-            <button
-              className="font-pixel text-[9px] text-white/40 hover:text-white"
-              onClick={() =>
-                onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
-              }
-            >
-              GIVE UP AND HEAD HOME
-            </button>
-          </div>
+          <NetDialog
+            title="Hold yer horses"
+            body={`${netTrouble.toUpperCase()}...`}
+            button="GIVE UP AND HEAD HOME"
+            subtle
+            onAccept={() =>
+              onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
+            }
+          />
         )}
         {partnerGone && flow.kind !== "gameover" && flow.kind !== "victory" && (
-          <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/85">
-            <div className="font-display text-4xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
-              Partner's gone
-            </div>
-            <div className="font-pixel text-[9px] text-white/60">{partnerGone.toUpperCase()}</div>
-            <button
-              className="border-2 border-[#E8B928] px-6 py-2 font-display text-xl uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
-              onClick={() =>
-                onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
-              }
-            >
-              Back to the Title
-            </button>
-          </div>
+          <NetDialog
+            title="Partner's gone"
+            body={partnerGone.toUpperCase()}
+            button="Back to the Title"
+            onAccept={() =>
+              onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
+            }
+          />
         )}
         {paused && flow.kind === "playing" && (
-          <div className="absolute inset-0 z-40 flex flex-col items-center justify-center gap-4 bg-black/70">
-            <div className="font-display text-5xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
-              Paused
-            </div>
-            <div className="text-xs text-[#a99b7c]">ESC to keep pickin'</div>
-            <button
-              className="border-2 border-[#E8B928] px-4 py-1 font-display text-lg uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
-              onClick={() =>
-                onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
-              }
-            >
-              Quit to Title
-            </button>
-          </div>
+          <PauseOverlay
+            online={!!net}
+            onResume={resumeFromPause}
+            onQuit={() =>
+              onExit({ won: false, scores: controller.run.players.map((p) => p?.score ?? 0), level: controller.run.levelIndex })
+            }
+          />
         )}
         {!ready && (
           <div className="absolute inset-0 flex items-center justify-center text-sm text-[#a99b7c]">
@@ -614,6 +638,36 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/** One-button online dialog (partner dropped / room gone): focusable so a
+ *  pad or remote can leave too. The "give up" flavor needs a deliberate
+ *  accept; back does nothing (there's nothing to go back to). */
+function NetDialog({
+  title,
+  body,
+  button,
+  subtle,
+  onAccept,
+}: {
+  title: string;
+  body: string;
+  button: string;
+  subtle?: boolean;
+  onAccept: () => void;
+}) {
+  const nav = useMenuNav({ count: 1, onAccept });
+  return (
+    <div className="absolute inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-black/80">
+      <div className="font-display text-4xl uppercase text-[#E8B928]" style={{ textShadow: "3px 3px 0 #000" }}>
+        {title}
+      </div>
+      <div className="font-pixel text-[9px] text-white/65">{body}</div>
+      <MenuButton subtle={subtle} bind={nav.bind(0)}>
+        {button}
+      </MenuButton>
     </div>
   );
 }

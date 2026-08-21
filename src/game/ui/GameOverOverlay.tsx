@@ -1,8 +1,13 @@
-// Continue countdown / game over / victory screens.
+// Continue countdown / game over / victory screens. Continue is a two-item
+// row (Continue / let it fall) so a stray B at the death screen can't
+// throw the run away; game over and victory leave on any accept.
 
 import { useEffect, useState } from "react";
 import type { GameFlow } from "../GameHost";
 import { castById } from "../cast";
+import { Hints } from "../../shell/MenuChrome";
+import { MenuButton } from "../../shell/screens";
+import { menuSfx, useMenuNav } from "../../shell/useMenuNav";
 
 type ControllerLike = {
   run: {
@@ -41,18 +46,34 @@ export function GameOverOverlay({
     return () => clearTimeout(t);
   }, [count, isContinue, waitForHost, onExit]);
 
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => {
-      if (isContinue && !waitForHost && (e.code === "KeyF" || e.code === "KeyK" || e.code === "Enter")) {
-        onContinue();
-      }
-      if (!isContinue && (e.code === "Enter" || e.code === "Space")) {
+  // continue: [Continue] [let it fall]; otherwise one button
+  const nav = useMenuNav({
+    count: isContinue && !waitForHost ? 2 : 1,
+    cols: 2,
+    enabled: !(isContinue && waitForHost),
+    sfx: false,
+    onMove: () => menuSfx("move"),
+    onAccept: (i) => {
+      if (isContinue) {
+        if (i === 0) {
+          menuSfx("accept");
+          onContinue();
+        } else {
+          menuSfx("back");
+          onExit();
+        }
+      } else {
+        menuSfx("accept");
         onExit();
       }
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
-  }, [isContinue, waitForHost, onContinue, onExit]);
+    },
+    onBack: () => {
+      if (!isContinue) {
+        menuSfx("back");
+        onExit();
+      }
+    },
+  });
 
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-4 bg-black/90">
@@ -74,15 +95,18 @@ export function GameOverOverlay({
             </div>
           ) : (
             <>
-              <button
-                className="border-2 border-[#E8B928] px-6 py-2 font-display text-2xl uppercase text-[#E8B928] hover:bg-[#E8B928] hover:text-black"
-                onClick={onContinue}
-              >
-                Hit F / K / Enter
-              </button>
-              <button className="font-pixel text-[9px] text-white/40 hover:text-white" onClick={onExit}>
-                let the holler fall
-              </button>
+              <div className="flex items-center gap-6">
+                <MenuButton bind={nav.bind(0)}>Continue</MenuButton>
+                <MenuButton subtle bind={nav.bind(1)}>
+                  let the holler fall
+                </MenuButton>
+              </div>
+              <Hints
+                hints={[
+                  { action: "accept", label: "CONTINUE" },
+                  { action: "leftright", label: "CHOOSE" },
+                ]}
+              />
             </>
           )}
         </>
@@ -115,12 +139,10 @@ export function GameOverOverlay({
               ) : null,
             )}
           </div>
-          <button
-            className="mt-3 border-2 border-white/70 px-6 py-2 font-display text-xl uppercase text-white hover:bg-white hover:text-black"
-            onClick={onExit}
-          >
-            To the Title (Enter)
-          </button>
+          <MenuButton bind={nav.bind(0)} className="mt-3">
+            To the Title
+          </MenuButton>
+          <Hints hints={[{ action: "accept", label: "ONWARD" }]} />
         </>
       )}
     </div>

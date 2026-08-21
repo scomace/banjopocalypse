@@ -518,6 +518,25 @@ export class JugBandAudio {
         this.tone(t, 0.3, 1046, "sine", 0.16);
         this.tone(t + 0.09, 0.3, 1318, "sine", 0.14);
         break;
+      // menu cursor: short banjo plucks so the shell sounds like the band
+      case "menu:move":
+        this.banjo(t, 64, 0.18, this.sfxBus);
+        break;
+      case "menu:tick":
+        this.banjo(t, 71, 0.14, this.sfxBus);
+        break;
+      case "menu:accept":
+        this.banjo(t, 76, 0.3, this.sfxBus);
+        this.banjo(t + 0.06, 83, 0.22, this.sfxBus);
+        break;
+      case "menu:back":
+        this.banjo(t, 67, 0.22, this.sfxBus);
+        this.banjo(t + 0.07, 60, 0.18, this.sfxBus);
+        break;
+      case "menu:nope":
+        this.noise(t, 0.06, 900, 3, 0.16);
+        this.banjo(t + 0.02, 52, 0.2, this.sfxBus);
+        break;
       case "extraLife": {
         const notes = [64, 67, 71, 76];
         notes.forEach((n, i) => this.banjo(t + i * 0.09, n, 0.5, this.sfxBus));

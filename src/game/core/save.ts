@@ -52,6 +52,7 @@ export type Settings = {
 const KEY_SAVE = "banjo/v1/save";
 const KEY_SCORES = "banjo/v1/scores";
 const KEY_SETTINGS = "banjo/v1/settings";
+const KEY_INITIALS = "banjo/v1/initials";
 
 export function loadSave(): SaveData {
   try {
@@ -119,7 +120,14 @@ export function addScoreEntry(entry: ScoreEntry): ScoreEntry[] {
     .sort((a, b) => b.score - a.score)
     .slice(0, 10);
   adapter.set(KEY_SCORES, JSON.stringify(scores));
+  adapter.set(KEY_INITIALS, entry.initials);
   return scores;
+}
+
+/** The last initials carved: pre-filled on the next entry so a pad player
+ *  can confirm a repeat in three presses. */
+export function loadLastInitials(): string {
+  return adapter.get(KEY_INITIALS) ?? "";
 }
 
 export function loadSettings(): Settings {

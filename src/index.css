@@ -21,6 +21,58 @@ body {
   overflow: hidden;
 }
 
+/* Menu focus: one look for keyboard, pad, remote and hover. Items carry
+   `data-focused` from useMenuNav; the UA ring is off (the caret/border IS the
+   ring) except for real Tab users, who get the same gold outline. */
+.menu-item {
+  position: relative;
+  outline: none;
+  transition:
+    transform 90ms ease-out,
+    border-color 90ms ease-out,
+    box-shadow 90ms ease-out;
+}
+.menu-item[data-focused="true"] {
+  border-color: #e8b928;
+  box-shadow: 4px 4px 0 #000;
+  transform: scale(1.04);
+  animation: menuPulse 1.4s ease-in-out infinite;
+  z-index: 1;
+}
+.menu-item[data-focused="true"]::before {
+  /* a CSS triangle: the pixel font has no caret glyph */
+  content: "";
+  position: absolute;
+  left: -18px;
+  top: 50%;
+  transform: translateY(-50%);
+  border-top: 7px solid transparent;
+  border-bottom: 7px solid transparent;
+  border-left: 10px solid #e8b928;
+  filter: drop-shadow(2px 2px 0 #000);
+}
+.menu-item.no-caret[data-focused="true"]::before {
+  content: none;
+}
+.menu-item:focus-visible {
+  outline: 2px solid #e8b928;
+  outline-offset: 2px;
+}
+@keyframes menuPulse {
+  0%,
+  100% {
+    box-shadow: 4px 4px 0 #000;
+  }
+  50% {
+    box-shadow: 4px 4px 0 #000, 0 0 14px rgba(232, 185, 40, 0.45);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-item[data-focused="true"] {
+    animation: none;
+  }
+}
+
 /* Admin screens were authored on a light ground in the source repo. */
 .admin-root {
   background: #f8fafc;

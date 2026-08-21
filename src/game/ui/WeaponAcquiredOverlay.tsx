@@ -1,9 +1,10 @@
 // The shrine reveal: sim holds, the screen goes to vignette, WEAPON ACQUIRED
 // slams in, the weapon icon spins up on a burst of rays, then the name and
-// its one-liner. Any key or click (after a short guard so a held belch key
-// can't skip it) hands control back — straight into the test-drive frenzy.
+// its one-liner. Any fresh key, pad button or click (after a short guard so
+// the slam plays) hands control back — straight into the test-drive frenzy.
 
 import { useEffect, useMemo, useState } from "react";
+import { menuInput } from "../../shell/menuInput";
 import type { ShrineGift } from "../sim/types";
 import { giftDesc, giftTitle } from "../sim/shrine";
 import { giftIcon } from "../render/sprites-weapons";
@@ -35,15 +36,15 @@ export function WeaponAcquiredOverlay({
     return () => clearTimeout(t);
   }, []);
 
+  // any FRESH press (key, pad button, remote) dismisses: the menu layer only
+  // reports edges, so a belch button still held from the pickup can't skip it
   useEffect(() => {
     if (!armed) return;
-    const h = (e: KeyboardEvent) => {
+    return menuInput.subscribe((e) => {
+      if (e.action !== "any" || e.repeat) return;
       if (e.code === "Escape") return; // leave pause alone
-      e.preventDefault();
       onDone();
-    };
-    window.addEventListener("keydown", h);
-    return () => window.removeEventListener("keydown", h);
+    });
   }, [armed, onDone]);
 
   return (
@@ -118,7 +119,7 @@ export function WeaponAcquiredOverlay({
         className="mt-3 font-pixel text-[8px] text-white/45"
         style={{ visibility: armed ? "visible" : "hidden", animation: "acqBlink 1.1s steps(2) infinite" }}
       >
-        any key to keep pickin'
+        any button to keep pickin'
       </div>
       <style>{`
         @keyframes acqSlam{0%{transform:scale(2.6);opacity:0}60%{transform:scale(0.94);opacity:1}100%{transform:scale(1)}}

@@ -1,10 +1,11 @@
 // The menu flow state machine. ?quickstart=1&cast=earl&level=1&seed=N jumps
 // straight into a run for automated QA.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { GameHost } from "../game/GameHost";
 import { markVictory } from "../game/core/save";
 import type { NetSession } from "../game/net/client";
+import { menuInput } from "./menuInput";
 import { OnlineScreen } from "./OnlineScreen";
 import {
   InitialsScreen,
@@ -57,6 +58,11 @@ export function GameShell() {
   const [state, setState] = useState<ShellState>(
     () => quickstartState() ?? onlineState() ?? { screen: "title" },
   );
+  // keyboard + pad + remote -> menu actions, for every screen and overlay
+  useEffect(() => {
+    menuInput.start();
+    return () => menuInput.stop();
+  }, []);
 
   switch (state.screen) {
     case "game":

@@ -100,9 +100,12 @@ export class InputSampler {
   };
   private onUp = (e: KeyboardEvent) => {
     this.down.delete(e.code);
+    this.swallowKeys.delete(e.code);
   };
   private onBlur = () => {
     this.down.clear();
+    this.swallowKeys.clear();
+    this.swallowPad.clear();
   };
   private onPadConnect = () => this.assignPads();
   private onPadDisconnect = () => this.assignPads();
@@ -129,41 +132,52 @@ export class InputSampler {
     return this.down.has(code);
   }
 
-  /** Any button on any pad, or any of the given key codes — for "press to join". */
-  anyPress(codes: string[]): boolean {
-    if (codes.some((c) => this.down.has(c))) return true;
+  /** Keys / pad buttons currently held that must NOT reach the sim until
+   *  released: call when a menu overlay closes on a press (the A that
+   *  confirmed the card must not also jump on the next tick). */
+  private swallowKeys = new Set<string>();
+  private swallowPad = new Map<number, Set<number>>();
+  swallowHeld(): void {
+    this.swallowKeys = new Set(this.down);
+    this.swallowPad.clear();
     const pads = navigator.getGamepads?.() ?? [];
-    for (const pad of pads) {
-      if (pad?.buttons.some((b) => b.pressed)) return true;
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
+      if (!pad) continue;
+      const held = new Set<number>();
+      pad.buttons.forEach((b, bi) => {
+        if (b.pressed) held.add(bi);
+      });
+      if (held.size) this.swallowPad.set(i, held);
     }
-    return false;
+  }
+  private keyLive(code: string): boolean {
+    return this.down.has(code) && !this.swallowKeys.has(code);
   }
 
   sample(player: 0 | 1): InputCommand {
     const b = this.bindings[player];
     let cmd = 0;
-    if (b.left.some((k) => this.down.has(k))) cmd |= CMD_LEFT;
-    if (b.right.some((k) => this.down.has(k))) cmd |= CMD_RIGHT;
-    if (b.jump.some((k) => this.down.has(k))) cmd |= CMD_JUMP;
-    if (b.blow.some((k) => this.down.has(k))) cmd |= CMD_BLOW;
+    if (b.left.some((k) => this.keyLive(k))) cmd |= CMD_LEFT;
+    if (b.right.some((k) => this.keyLive(k))) cmd |= CMD_RIGHT;
+    if (b.jump.some((k) => this.keyLive(k))) cmd |= CMD_JUMP;
+    if (b.blow.some((k) => this.keyLive(k))) cmd |= CMD_BLOW;
 
     const padIdx = this.padFor[player];
     if (padIdx >= 0) {
       const pad = navigator.getGamepads?.()[padIdx];
       if (pad) {
+        // swallowed buttons come back once released
+        const sw = this.swallowPad.get(padIdx);
+        if (sw) for (const bi of [...sw]) if (!pad.buttons[bi]?.pressed) sw.delete(bi);
+        const pressed = (bi: number) => !!pad.buttons[bi]?.pressed && !sw?.has(bi);
         const ax = pad.axes[0] ?? 0;
-        if (ax < -0.35 || pad.buttons[14]?.pressed) cmd |= CMD_LEFT;
-        if (ax > 0.35 || pad.buttons[15]?.pressed) cmd |= CMD_RIGHT;
-        if (pad.buttons[0]?.pressed) cmd |= CMD_JUMP; // A / cross (again in air: special)
-        if (pad.buttons[2]?.pressed || pad.buttons[1]?.pressed) cmd |= CMD_BLOW; // X/B
+        if (ax < -0.35 || pressed(14)) cmd |= CMD_LEFT;
+        if (ax > 0.35 || pressed(15)) cmd |= CMD_RIGHT;
+        if (pressed(0)) cmd |= CMD_JUMP; // A / cross (again in air: special)
+        if (pressed(2) || pressed(1)) cmd |= CMD_BLOW; // X/B
       }
     }
     return cmd;
-  }
-
-  pausePressed(): boolean {
-    if (this.down.has("Escape")) return true;
-    const pads = navigator.getGamepads?.() ?? [];
-    return pads.some((p) => p?.buttons[9]?.pressed);
   }
 }
