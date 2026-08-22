@@ -79,7 +79,8 @@ export function spawnEnemy(sim: Sim, kind: EnemyKind, x: number, y: number): Ene
     vy: 0,
     facing: sim.rng() < 0.5 ? -1 : 1,
     grounded: false,
-    angry: false,
+    // ORNERY STREAK: the whole roster starts mad (see sim/hazards.ts)
+    angry: sim.hazard === "ornery",
     phase: { kind: "normal" },
     hp: spec.hp,
     stateTimer: rangeInt(sim.rng, 30, 140),

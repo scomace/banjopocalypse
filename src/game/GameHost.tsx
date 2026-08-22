@@ -17,6 +17,7 @@ import { getLevelDef } from "./levels";
 import { isBossLevel, worldForLevel } from "./levels/worlds";
 import { deriveSeed } from "./core/rng";
 import { createSim, type SimConfig } from "./sim/sim";
+import { HAZARDS, type HazardId } from "./sim/hazards";
 import { takeShrine } from "./sim/shrine";
 import type { FxEvent, ShrineGift, Sim, SimInputs } from "./sim/types";
 import { LEVEL_CLEAR_TICKS } from "./sim/constants";
@@ -63,6 +64,22 @@ export type GameHostProps = {
   onExit: (result: { won: boolean; scores: number[]; level: number }) => void;
 };
 
+/**
+ * `?quickstart=1&hazard=greased` pins the Holler Hazard on every level (and
+ * `hazard=none` forces straight levels) so a hazard can be playtested without
+ * seed-fishing. Ignored online: lockstep peers must agree, and a URL on one
+ * machine is not shared state.
+ */
+function readHazardPin(net?: NetSession): HazardId | null | undefined {
+  if (net || typeof window === "undefined") return undefined;
+  const q = new URLSearchParams(window.location.search);
+  if (!q.has("quickstart")) return undefined;
+  const raw = q.get("hazard");
+  if (!raw) return undefined;
+  if (raw === "none" || raw === "off") return null;
+  return HAZARDS.some((h) => h.id === raw) ? (raw as HazardId) : undefined;
+}
+
 class RunController {
   run: RunState;
   sim: Sim;
@@ -75,8 +92,18 @@ class RunController {
   /** The finished input log of the last completed level. */
   lastReplay: LevelReplay | null = null;
 
-  constructor(castIds: (string | null)[], startLevel: number, seed: number) {
+  /** `?hazard=` quickstart pin: forces every level's Holler Hazard for
+   *  playtesting. Offline only — online peers roll from the shared seed. */
+  private hazardPin: HazardId | null | undefined;
+
+  constructor(
+    castIds: (string | null)[],
+    startLevel: number,
+    seed: number,
+    hazardPin?: HazardId | null,
+  ) {
     this.run = newRun(seed, startLevel, castIds);
+    this.hazardPin = hazardPin;
     this.sim = this.buildSim();
   }
 
@@ -96,6 +123,7 @@ class RunController {
       ),
       deathless: this.run.deathlessThisWorld,
       shrine: shrineGiftsFor(this.run),
+      ...(this.hazardPin !== undefined ? { hazard: this.hazardPin } : {}),
     };
     this.clearedHandled = false;
     this.held = false;
@@ -266,7 +294,7 @@ export function GameHost({ castIds, startLevel, seed, net, onExit }: GameHostPro
   const reconnecting = useRef(false);
 
   const controller = useMemo(
-    () => new RunController(castIds, startLevel, seed),
+    () => new RunController(castIds, startLevel, seed, readHazardPin(net)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );

@@ -96,6 +96,20 @@ import { fireAirSpecial } from "./airspecials";
 import { refillWind, regenWind, spendWind, stumble } from "./wind";
 import { createShrine, nagShrine, shrineHoldsLevel, stepShrine } from "./shrine";
 import { createCage, hitCage, stepCage, touchesCage } from "./cage";
+import {
+  EARLYBIRD_HURRY_TICKS,
+  hazardDef,
+  hazardFallMult,
+  hazardFrictionMult,
+  hazardGravityMult,
+  hazardJarAlwaysDrops,
+  hazardJarMult,
+  hazardScoreMult,
+  OVERFLOW_FIRST_JAR_TICKS,
+  rollHazard,
+  stepHazard,
+  type HazardId,
+} from "./hazards";
 
 export type SimPlayerConfig = {
   castId: string;
@@ -116,6 +130,10 @@ export type SimConfig = {
   deathless: boolean;
   /** weapon shrine pedestals for this level (level 5 of a world), else absent */
   shrine?: ShrineGift[] | null;
+  /** Holler Hazard override: omit to roll from the seed (the normal path),
+   *  `null` to force a straight level, or an id to pin one. Tests, QA scripts
+   *  and the `?hazard=` quickstart param use this; play never sets it. */
+  hazard?: HazardId | null;
 };
 
 export function createSim(cfg: SimConfig): Sim {
@@ -177,6 +195,11 @@ export function createSim(cfg: SimConfig): Sim {
     });
   }
 
+  const hazard =
+    cfg.hazard !== undefined
+      ? cfg.hazard
+      : rollHazard(cfg.seed, cfg.levelIndex, cfg.isBoss);
+
   const sim: Sim = {
     tick: 0,
     rng,
@@ -219,7 +242,24 @@ export function createSim(cfg: SimConfig): Sim {
     shrine: null,
     shrineTaken: null,
     cage: null,
+    hazard,
+    hazardTick: 0,
   };
+  // Holler Hazard wiring: the modulating ones fold into the sim's own fields
+  // here, the recurring ones tick in stepHazard.
+  if (hazard === "earlybird" && !cfg.levelDef.hurryTicks) {
+    sim.hurryTick = EARLYBIRD_HURRY_TICKS;
+  }
+  if (hazard === "overflow") {
+    sim.nextJarTick = Math.min(
+      Math.floor(sim.nextJarTick * hazardJarMult(sim)),
+      LEVEL_INTRO_TICKS + OVERFLOW_FIRST_JAR_TICKS,
+    );
+  }
+  // NB: no sim.rng draws anywhere in the hazard wiring. The main stream has
+  // to stay byte-identical to the pre-hazard sim so every tuned level plays
+  // exactly as authored; the per-event jitter comes later, in stepHazard.
+  sim.hazardTick = LEVEL_INTRO_TICKS + 45;
   sim.cage = createCage(cfg.levelIndex, level, cfg.isBoss);
 
   // Enemies present from tick 0 (non-boss levels).
@@ -239,7 +279,8 @@ export function emit(sim: Sim, e: FxEvent): void {
 }
 
 export function score(sim: Sim, player: 0 | 1, amount: number): void {
-  sim.scored.push({ player, amount });
+  // Hazard levels pay a premium, so the banner reads as an invitation.
+  sim.scored.push({ player, amount: Math.round(amount * hazardScoreMult(sim)) });
 }
 
 // ---------------------------------------------------------------- players
@@ -316,6 +357,8 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   const accel = p.grounded
     ? P_ACCEL
     : P_ACCEL * (swinging ? 0.8 : p.gliding ? GLIDE_AIR_CONTROL : P_AIR_CONTROL);
+  // GREASED FLOORS drops ground friction near zero: stopping becomes a plan.
+  const decel = P_DECEL * hazardFrictionMult(sim);
   if (left && !right) {
     p.vx = p.vx <= -maxSpeed ? p.vx : Math.max(p.vx - accel, -maxSpeed);
     p.facing = -1;
@@ -323,11 +366,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.vx = p.vx >= maxSpeed ? p.vx : Math.min(p.vx + accel, maxSpeed);
     p.facing = 1;
   } else if (p.grounded) {
-    if (p.vx > 0) p.vx = Math.max(0, p.vx - P_DECEL);
-    else if (p.vx < 0) p.vx = Math.min(0, p.vx + P_DECEL);
+    if (p.vx > 0) p.vx = Math.max(0, p.vx - decel);
+    else if (p.vx < 0) p.vx = Math.min(0, p.vx + decel);
   }
   if (p.grounded && !swinging && Math.abs(p.vx) > maxSpeed) {
-    p.vx = Math.sign(p.vx) * Math.max(maxSpeed, Math.abs(p.vx) - P_DECEL);
+    p.vx = Math.sign(p.vx) * Math.max(maxSpeed, Math.abs(p.vx) - decel);
   }
 
   // jump buffering + coyote
@@ -371,8 +414,11 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.vy = P_JUMP_CUT_VY;
   }
 
-  // gravity
-  p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
+  // gravity (THIN AIR lightens both the pull and the terminal fall)
+  p.vy = Math.min(
+    p.vy + P_GRAVITY * hazardGravityMult(sim),
+    P_MAX_FALL * hazardFallMult(sim),
+  );
 
   // Darlene's possum chute: hold JUMP on the way down to drift, let go to drop
   const wasGliding = p.gliding;
@@ -783,11 +829,20 @@ function stepJars(sim: Sim): void {
   if (sim.tick < sim.nextJarTick) return;
   // guaranteed cadence, biased toward authored jar points
   sim.nextJarTick =
-    sim.tick + Math.floor(JAR_INTERVAL_TICKS * (0.75 + sim.rng() * 0.5) * (sim.isBoss ? 0.45 : 1));
+    sim.tick +
+    Math.floor(
+      JAR_INTERVAL_TICKS *
+        (0.75 + sim.rng() * 0.5) *
+        (sim.isBoss ? 0.45 : 1) *
+        hazardJarMult(sim),
+    );
   for (const p of sim.players) {
     if (!p.alive || p.loadout.weapons.length === 0) continue;
     const luckBonus = 1 + p.luck * 0.04;
-    if (sim.rng() > 0.85 * luckBonus && !sim.isBoss) continue;
+    // the draw happens either way so the stream shape never depends on the
+    // hazard; THE STILL'S OVERFLOWIN' just ignores the miss
+    const missed = sim.rng() > 0.85 * luckBonus;
+    if (missed && !sim.isBoss && !hazardJarAlwaysDrops(sim)) continue;
     const wIdx = rollFrenzyWeapon(sim, p.loadout);
     const point =
       sim.level.jarPoints.length > 0
@@ -1034,6 +1089,14 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
     sim.statusTicks--;
     if (sim.statusTicks <= 0) {
       sim.status = "play";
+      const hz = hazardDef(sim.hazard);
+      if (hz) {
+        emit(sim, { t: "burst", text: hz.name, x: FIELD_W / 2, y: 150, big: true, palette: "toxic" });
+        emit(sim, { t: "sfx", name: "hurryUp", pitch: 0.8 });
+        emit(sim, { t: "shake", power: 3 });
+        const teller = sim.players.find((p) => p.alive);
+        if (teller) emit(sim, { t: "balloon", player: teller.index, trigger: "hazard" });
+      }
       // Jar o' Lightnin': the level opens with the jar already in hand
       for (const p of sim.players) {
         if (!p.headStart || !p.alive || p.loadout.weapons.length === 0) continue;
@@ -1064,6 +1127,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepPour(sim);
   stepShrine(sim);
   stepCage(sim);
+  stepHazard(sim);
 
   // specials cadence (never on boss levels' final phase; still fun mid-boss)
   if (sim.tick >= sim.nextSpecialTick && sim.specials.length < 2) {

@@ -1,8 +1,9 @@
 # BANJOPOCALYPSE
 
 A shine-belchin' hootenanny at the end of the world. 99 levels, 9 worlds,
-1-2 players on one couch, 12 ridiculous frenzy weapons, a fully procedural
-jug-band soundtrack, and a banjo duel with the Devil at the bottom of it.
+1-2 players on one couch, 12 ridiculous frenzy weapons, 10 Holler Hazards that
+rewrite the rules mid-campaign, a fully procedural jug-band soundtrack, and a
+banjo duel with the Devil at the bottom of it.
 
 Original single-screen arcade platformer in the spirit of the classic
 belch-trapping genre plus survivors-style weapon frenzies. Every asset is
@@ -34,6 +35,8 @@ load (`src/aachar/baker.ts`).
 - `/#/admin/baker` bake QA: live rig vs baked sheets
 - `?quickstart=1&cast=earl&level=12&seed=5` jump straight into a run
 - `npx tsx scripts/sim-smoke.mts` headless sim torture test
+- `?quickstart=1&hazard=greased` pins a Holler Hazard on every level (`hazard=none` forces straight levels); offline only
+- `node scripts/qa-hazard.mjs [hazard|all]` browser QA for the hazards: banner, HUD tag and each hazard's own entities (needs `vite --port 5200`)
 - `node scripts/qa-wind.mjs` browser QA for wind (air-special stamina): pips drain, a gassed press stumbles, screenshot in `qa-wind.png` (needs `vite --port 5200`)
 - sampled SFX: drop an mp3/wav in `public/sounds/` and register it in `SAMPLE_SFX` (`src/game/audio/engine.ts`); a missing file falls back to synth. `wind-fail.mp3` / `wind-strain.mp3` are the wind slots
 - `node scripts/qa-shrine.mjs 5` headless weapon-shrine QA (pedestals, reveal card, test-drive frenzy; needs `vite --port 5200`)

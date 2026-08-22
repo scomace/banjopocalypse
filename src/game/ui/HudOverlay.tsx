@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import { WIND_ENABLED, WIND_MAX, YEEHAW } from "../sim/constants";
 import { castById } from "../cast";
 import { weaponById } from "../sim/weapons";
+import { hazardDef, type HazardId } from "../sim/hazards";
 
 type ControllerLike = {
   run: {
@@ -25,6 +26,7 @@ type ControllerLike = {
     }[];
     world: { name: string };
     isBoss: boolean;
+    hazard: HazardId | null;
   };
 };
 
@@ -92,6 +94,13 @@ export function HudOverlay({ controller }: { controller: ControllerLike }) {
       if (lvl) {
         lvl.textContent = `${controller.sim.world.name.toUpperCase()} · ${controller.run.levelIndex}/99`;
       }
+      // hazard tag: stays up all level so nobody forgets why the floor is slick
+      const hzEl = root.querySelector<HTMLElement>("[data-hazard]");
+      if (hzEl) {
+        const hz = hazardDef(controller.sim.hazard);
+        hzEl.style.display = hz ? "block" : "none";
+        if (hz) hzEl.textContent = `${hz.name} · x1.25`;
+      }
     };
     raf = requestAnimationFrame(update);
     return () => cancelAnimationFrame(raf);
@@ -155,6 +164,11 @@ export function HudOverlay({ controller }: { controller: ControllerLike }) {
         data-level
         className="absolute left-1/2 top-1 -translate-x-1/2 font-pixel text-[9px] text-white/70"
         style={{ textShadow: "1px 1px 0 #000" }}
+      />
+      <div
+        data-hazard
+        className="absolute left-1/2 top-[14px] -translate-x-1/2 font-pixel text-[7px] text-[#8CE86A]"
+        style={{ display: "none", textShadow: "1px 1px 0 #000" }}
       />
     </div>
   );

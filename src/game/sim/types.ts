@@ -4,6 +4,7 @@
 
 import type { Rng } from "../core/rng";
 import type { EnemyKind, ParsedLevel, WorldDef } from "../levels/types";
+import type { HazardId } from "./hazards";
 
 export type Facing = -1 | 1;
 
@@ -384,6 +385,10 @@ export type Sim = {
   shrineTaken: { player: 0 | 1; gift: ShrineGift } | null;
   /** rescue cage (one per rescue level, see cast.ts), null elsewhere */
   cage: CageState | null;
+  /** this level's Holler Hazard (sim/hazards.ts), null on a straight level */
+  hazard: HazardId | null;
+  /** next tick the live hazard fires an event (hogs, hens, bolts, gas) */
+  hazardTick: number;
 };
 
 /** A caged cousin. Always present on their level, even once rescued: the

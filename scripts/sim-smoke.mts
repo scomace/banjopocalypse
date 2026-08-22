@@ -9,6 +9,9 @@
 //      claiming grants the gift + a frenzy and releases the level-clear hold
 //   8. run layer: signature Lv1, hands are always 3 cards w/o newWeapon,
 //      shrine offers never repeat an owned weapon and go relic when full
+//  18. holler hazards: the per-level chaos roll is pure, never lands on a
+//      boss, every hazard survives an unattended level, and hazard levels pay
+//      the score premium
 //  16. wind: air specials spend stamina, gassed presses coin-flip into a
 //      stumble, the meter regens grounded, bosses are exempt, all deterministic
 // Run: npx tsx scripts/sim-smoke.mts
@@ -17,13 +20,14 @@ import { getLevelDef, levelCountCheck } from "../src/game/levels";
 import { hashSim } from "../src/game/sim/hash";
 import { worldForLevel, isBossLevel } from "../src/game/levels/worlds";
 import { parseLevel } from "../src/game/levels/parse";
-import { createSim, step, startFrenzy, hurtPlayer } from "../src/game/sim/sim";
+import { createSim, score, step, startFrenzy, hurtPlayer } from "../src/game/sim/sim";
 import type { Sim } from "../src/game/sim/types";
 import { WEAPONS } from "../src/game/sim/weapons";
 import { CAST, rescueForLevel } from "../src/game/cast";
 import { mulberry32 } from "../src/game/core/rng";
 import { SHRINE_LEASH_R, takeShrine } from "../src/game/sim/shrine";
 import { hitCage } from "../src/game/sim/cage";
+import { HAZARDS, HAZARD_SCORE_MULT, rollHazard } from "../src/game/sim/hazards";
 import {
   P_HEIGHT,
   PVP_BOUNCE,
@@ -673,6 +677,7 @@ for (const c of CAST) {
       { castId: "merle", loadout: mkLoadout(), livesLeft: 3 },
     ],
     deathless: false,
+    hazard: null, // this case idles both players; an early revenuer would eat them
   });
   const idle = [0, 0];
   const tickN = (n: number, killAll = false) => {
@@ -898,6 +903,117 @@ console.log("[17] rescue cages");
     if (mkSim(lvl).cage) fail(`level ${lvl} grew a cage`);
   }
   console.log(`    cages ok (${popped}/${caged.length} popped, 3 hits each, levels clear around them)`);
+}
+
+// ---- 18. holler hazards ----
+// One seeded chaos modifier per level. The roll must be pure (same seed +
+// level -> same hazard everywhere, or lockstep desyncs), must never land on a
+// boss, and every hazard has to survive a long unattended run without
+// crashing or letting state go non-finite.
+{
+  console.log("[18] holler hazards");
+
+  // pure + boss-free + never before level 3
+  for (let seed = 1; seed <= 40; seed++) {
+    for (let lvl = 1; lvl <= 99; lvl++) {
+      const a = rollHazard(seed, lvl, isBossLevel(lvl));
+      const b = rollHazard(seed, lvl, isBossLevel(lvl));
+      if (a !== b) fail(`hazard roll not pure at seed ${seed} level ${lvl}`);
+      if (a && isBossLevel(lvl)) fail(`hazard ${a} rolled on boss level ${lvl}`);
+      if (a && lvl < 3) fail(`hazard ${a} rolled on level ${lvl}`);
+      if (a && !HAZARDS.some((h) => h.id === a)) fail(`unknown hazard id ${a}`);
+    }
+  }
+
+  // the ramp actually ramps and the whole set is reachable across a campaign
+  const seen = new Set<string>();
+  let hazarded = 0;
+  let plain = 0;
+  for (let seed = 1; seed <= 400; seed++) {
+    for (const lvl of [4, 15, 26, 37, 48, 59, 70, 81, 92]) {
+      const h = rollHazard(seed, lvl, false);
+      if (h) {
+        seen.add(h);
+        hazarded++;
+      } else plain++;
+    }
+  }
+  if (seen.size !== HAZARDS.length) {
+    fail(`only ${seen.size}/${HAZARDS.length} hazards reachable across 400 seeds`);
+  }
+  if (hazarded === 0 || plain === 0) fail("hazard odds are degenerate (all or nothing)");
+
+  // every hazard runs a full level unattended without breaking the sim
+  const mkLoadout = () => ({ weapons: [{ id: "twang", level: 3 }], tonics: [], evolved: [] });
+  for (const def of HAZARDS) {
+    const sim = createSim({
+      seed: 77,
+      levelDef: getLevelDef(14),
+      world: worldForLevel(14),
+      levelIndex: 14,
+      isBoss: false,
+      players: [
+        { castId: "earl", loadout: mkLoadout(), livesLeft: 9 },
+        { castId: "merle", loadout: mkLoadout(), livesLeft: 9 },
+      ],
+      deathless: false,
+      hazard: def.id,
+    });
+    if (sim.hazard !== def.id) fail(`hazard override ignored for ${def.id}`);
+    const rnd = mulberry32(def.id.length * 977 + 3);
+    const cmd = () => Math.floor(rnd() * 64);
+    let prev = [0, 0];
+    for (let t = 0; t < 3000; t++) {
+      const next = [cmd(), cmd()];
+      step(sim, next, prev);
+      prev = next;
+    }
+    finite(sim, `hazard ${def.id}`);
+  }
+
+  // score premium: the same award pays more on a hazard level
+  const payout = (hazard: "greased" | null) => {
+    const sim = createSim({
+      seed: 4242,
+      levelDef: getLevelDef(14),
+      world: worldForLevel(14),
+      levelIndex: 14,
+      isBoss: false,
+      players: [{ castId: "earl", loadout: mkLoadout(), livesLeft: 3 }],
+      deathless: false,
+      hazard,
+    });
+    score(sim, 0, 1000);
+    return sim.scored.reduce((a, sc) => a + sc.amount, 0);
+  };
+  const plainPay = payout(null);
+  const hazardPay = payout("greased");
+  if (plainPay !== 1000) fail(`straight level paid ${plainPay} for a 1000 award`);
+  if (hazardPay !== Math.round(1000 * HAZARD_SCORE_MULT)) {
+    fail(`hazard level paid ${hazardPay}, want ${Math.round(1000 * HAZARD_SCORE_MULT)}`);
+  }
+
+  // a straight level is byte-identical to the pre-hazard sim: the roll uses
+  // its own stream, so hazard-free play must not have shifted at all
+  const straight = (seed: number) => {
+    const sim = createSim({
+      seed,
+      levelDef: getLevelDef(14),
+      world: worldForLevel(14),
+      levelIndex: 14,
+      isBoss: false,
+      players: [{ castId: "earl", loadout: mkLoadout(), livesLeft: 3 }],
+      deathless: false,
+      hazard: null,
+    });
+    for (let t = 0; t < 600; t++) step(sim, [0], [0]);
+    return hashSim(sim);
+  };
+  if (straight(31) !== straight(31)) fail("straight-level replay is not deterministic");
+
+  console.log(
+    `    hazards ok (${seen.size} reachable, boss-free, x1.25 payout ${plainPay} -> ${hazardPay})`,
+  );
 }
 
 if (failures === 0) {

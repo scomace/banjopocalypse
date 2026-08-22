@@ -225,6 +225,39 @@ Level 11 of each world is its boss arena. Each world introduces 2 enemy types, a
 
 **Secrets:** clear any world's first 10 levels deathless → hidden door on the boss level leads to a **Warp Cellar** (bonus food shower + a free tonic + skip-1-level warp).
 
+### Holler Hazards (added 2026-08-22)
+
+99 authored layouts never surprise a returning player twice. Hazards do. Every
+non-boss level from level 3 on rolls **at most one** modifier, announced on the
+intro card under the level name and tagged in the HUD for the whole level.
+Odds ramp with the world (28% + 4% per world, capped 62%), so world 1 is mostly
+straight and world 9 is mostly weird. A hazard level pays **x1.25 on every
+score event**, so the banner reads as an invitation, not a punishment.
+
+| Hazard | What it does | From |
+|---|---|---|
+| **THE STILL'S OVERFLOWIN'** | jars every ~10 s instead of ~40, and none of them fizzle: near-permanent frenzy | W1 |
+| **CHICKEN TRUCK WRECK** | loose hens cross the screen every 0.7-1.6 s, bowling varmints | W1 |
+| **GREASED FLOORS** | ground friction x0.12; stopping becomes a plan | W2 |
+| **HOG WILD** | a hog stampedes the floor every 5-9 s | W2 |
+| **THIN AIR** | gravity x0.72, terminal fall x0.85 | W2 |
+| **FULL LUNGS** | wind never drains: air specials are free all level | W3 |
+| **GAS LEAK** | skunk clouds bloom at random every 3-6 s | W3 |
+| **ORNERY STREAK** | the whole roster spawns angry (+40% speed) | W3 |
+| **DRY LIGHTNIN'** | a chaining bolt strikes a random varmint every 1.5-3 s | W4 |
+| **THE REVENUER'S EARLY** | hurry-up deadline drops from 45 s to 18 s | W4 |
+
+**Determinism rules (non-negotiable).** The roll comes from its own
+`mulberry32(seed ^ 0x9e3779b9)` stream and the wiring draws **zero** values
+from `sim.rng`, so a hazard-free level is byte-identical to the pre-hazard sim
+and every authored layout keeps its tuned feel. Lockstep peers and replays
+agree for free because both derive the same hazard from the same
+(seed, levelIndex). Never on boss levels: those arenas are tuned fights, not a
+lottery. `SimConfig.hazard` pins or disables one for tests and QA;
+`?quickstart=1&hazard=greased` (or `hazard=none`) pins it in the browser,
+offline only. Logic in `sim/hazards.ts`; smoke section 18 and
+`node scripts/qa-hazard.mjs` cover it.
+
 ---
 
 ## 8. Special bubbles, letters, food (confirmed: full moonshine set)
