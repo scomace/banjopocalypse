@@ -150,7 +150,7 @@ Hand shape: one weapon card whenever one exists, **at most one tonic** (always o
 | 1 | **Granny's Good Book** | 1 bible orbits slowly | speed, +books (2@L3, 3@L5), damage | **King James Cyclone** - 6 books, pulls enemies inward |
 | 2 | **Twang Wave** | banjo chord shockwave ring every 4 s | radius, rate, damage | **Duelin' Banjos** - double echo rings, stuns |
 | 3 | **Moonshine Jug** | lobbed jar, fire pool 2 s | +jars, pool size/duration | **White Lightning** - screen-wide splash wave |
-| 4 | **Cornholio** | auto-blast nearest enemy, 3 pellets | +pellets, rate, spread | **Boomstick Bertha** - 360° both-barrels nova |
+| 4 | **Ol' Scattergun** | auto-blast nearest enemy, 3 pellets | +pellets, rate, spread | **Boomstick Bertha** - 360° both-barrels nova |
 | 5 | **Possum Posse** | 1 possum patrols platforms, plays dead, bites | +possums, speed | **Possum Stampede** - 8 possums flood the floor |
 | 6 | **Jaw Harp Boinger** | bouncing projectile, 4 ricochets | +bounces, +projectiles | **Boingpocalypse** - never stops bouncing for the frenzy |
 | 7 | **Washboard Scrub** | rapid melee scrub arc in front | arc size, rate, knockback | **Washboard Abs** - body-contact damage aura |
@@ -163,7 +163,7 @@ Hand shape: one weapon card whenever one exists, **at most one tonic** (always o
 ### Tonics (passives; also evolution keys)
 **Grit** (+damage) · **Rocket-Fuel Shine** (+move speed) · **Lung Butter** (+bubble range/speed) · **Hog Fat** (survive 1 hit per level) · **Lucky Rabbit Foot** (+drops, +jar frequency) · **Extra Pickin' Finger** (+5 s frenzy duration) · **Granny's Spectacles** (+pickup magnet radius) · **Chaw of Immortality** (+1 max life, once per run)
 
-Evolution pairings (weapon → required tonic): Good Book→Spectacles, Twang→Pickin' Finger, Jug→Rocket-Fuel, Cornholio→Grit, Possum→Rabbit Foot, Boinger→Lung Butter, Washboard→Hog Fat, Chicken→Rabbit Foot, Spittoon→Lung Butter, Lightnin'→Pickin' Finger, Eddie→Chaw, Hound→Grit.
+Evolution pairings (weapon → required tonic): Good Book→Spectacles, Twang→Pickin' Finger, Jug→Rocket-Fuel, Scattergun→Grit, Possum→Rabbit Foot, Boinger→Lung Butter, Washboard→Hog Fat, Chicken→Rabbit Foot, Spittoon→Lung Butter, Lightnin'→Pickin' Finger, Eddie→Chaw, Hound→Grit.
 
 **Kin AI (Cousin Eddie / Family Reunion).** Kin are dumb linebackers, not pathfinders: they commit to a direction (facing is locked for 20 ticks after any turn, and only changes with boots on the ground), run straight through varmints, **bonk** off walls (stunned `BONK!`/`OOF!` for 15/24 ticks, then turn once), and run straight off ledges (the vertical wrap brings them back around). They only turn for a varmint on their own floor or within a hop overhead; a target on a higher floor is chased by *climbing*: hop when a shelf is within a jump ahead, or leap off a ledge toward it. A same-floor varmint in front triggers a headbutt **lunge** (2× speed for 10 ticks). Granny is slower, never hops, and swats wider. Nearby-but-unreachable targets never cause pacing or in-place jitter by design. Logic: `stepKin` in `sim/weapons.ts` (`KIN_*` tunables); `npx tsx scripts/qa-eddie.mts` measures flip rate, stuck time, bonks, hops and kills across several layouts.
 
@@ -181,7 +181,7 @@ All built in the aachar editor as manifest characters tagged `banjo-cast`. Stats
 | **Merle** | Adventurer2 | The other twin. Legally distinct from Earl. | Jaw Harp Boinger | 4/3/3/2 | start (P2 default) |
 | **Granny Mae** | Ida | Owns the still. Owns everyone in checkers. | Granny's Good Book | 2/3/2/5 | rescue: World 1, level 4 |
 | **Cooter** | Lou | Volunteer fire chief. Started most of the fires. | Moonshine Jug | 3/2/3/3 (+2 s frenzy) | rescue: World 3, level 8 |
-| **Bobbie Sue** | Adventurer3 | County skeet champ, 9 years runnin'. | Cornholio | 4/4/2/2 | rescue: World 2, level 6 |
+| **Bobbie Sue** | Adventurer3 | County skeet champ, 9 years runnin'. | Ol' Scattergun | 4/4/2/2 | rescue: World 2, level 6 |
 | **Darlene** | afsdf | Talks to possums. They talk back. | Possum Posse | 3/3/3/4 | rescue: World 4, level 6 |
 | **Buford** | Zed2 | Once jumped the crick. The *wide* part. | Washboard Scrub | 2/2/5/3 | rescue: World 5, level 8 |
 | **Grandpappy Zeke** | Zeddington | Struck by lightning 6 times. Likes it. | Lightnin' Rod | 2/5/2/3 | rescue: World 8, level 9 |
