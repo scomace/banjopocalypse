@@ -27,6 +27,16 @@ const SpriteGallery = lazy(() =>
     default: m.SpriteGallery,
   })),
 );
+const LevelEditor = lazy(() =>
+  import("./screens/admin-levels/LevelEditor").then((m) => ({
+    default: m.LevelEditor,
+  })),
+);
+const SfxMixer = lazy(() =>
+  import("./screens/admin-sfx/SfxMixer").then((m) => ({
+    default: m.SfxMixer,
+  })),
+);
 
 function AdminLoading() {
   return (
@@ -67,6 +77,26 @@ export function AppRouter() {
             <div className="admin-root">
               <Suspense fallback={<AdminLoading />}>
                 <SpriteGallery />
+              </Suspense>
+            </div>
+          }
+        />
+        <Route
+          path="/admin/levels"
+          element={
+            <div className="admin-root">
+              <Suspense fallback={<AdminLoading />}>
+                <LevelEditor />
+              </Suspense>
+            </div>
+          }
+        />
+        <Route
+          path="/admin/sfx"
+          element={
+            <div className="admin-root">
+              <Suspense fallback={<AdminLoading />}>
+                <SfxMixer />
               </Suspense>
             </div>
           }

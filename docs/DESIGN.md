@@ -99,7 +99,9 @@ Run (walk 4.5 tiles/s), jump (3.5 tiles high, fixed arc), no attack besides bubb
 - **Blow** (X / gamepad B): the character *burps* the bubble out. Every blow plays a small pitch-varied **'hic'** SFX with a tiny hiccup pose twitch. The bubble travels horizontally ~3 tiles (stat/tonic-modified) then floats up, following per-level wind currents (levels define current vector fields; this is the level-design spice).
 - Traveling bubble touching an enemy **traps** it. Trapped 6 s, then escapes **angry** (+40% speed, red tint) - angry state resets on re-trap.
 - **Pop** a trapped bubble (touch/headbutt) → enemy dies, arcs across screen as a **food item** (score). Pop N trapped bubbles within 0.5 s = **chain**: 1000 × 2^(N-1) points, big comic burst at N≥3 (`KABLOOIE!`, `HOG WILD!`, `YEE-HAW!`).
-- Empty bubbles pop on spikes, after 12 s TTL, or when ridden twice.
+- **Strings:** floating bubbles shove each other apart and pack into honeycomb clusters instead of overlapping. Popping any bubble lights a 3-tick fuse on every bubble touching it, so a whole string goes up in one rippling burst (empties included); every trapped pop in the ripple lands inside the chain window, so the string's varmint count is the chain.
+- Empty bubbles pop when a player's head comes up under them, on spikes, after 12 s TTL, or when bounced on twice (first bounce survives). Walking into an empty bubble's side nudges it along, so strings can be herded together.
+- Special (moonshine-set) bubbles are real bubbles: they drift in from a side, ride wind, pack into strings, can be stood on, nudged, headbutted and chain-popped. A special popped in a string with N trapped varmints fires **charged xN** (longer flood, wider bolt, bigger skunk cloud, faster hog, longer prayer).
 - Both players' bubbles are shared platforms - co-op bubble-stairway climbing is intended tech.
 
 ### Level flow

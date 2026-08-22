@@ -10,6 +10,13 @@ import { castById, castJumpMult } from "../cast";
 import {
   BUBBLE_BLOW_COOLDOWN,
   BUBBLE_BOUNCE_VY,
+  BUBBLE_CHAIN_DIST,
+  BUBBLE_CHAIN_RIPPLE_TICKS,
+  BUBBLE_NUDGE,
+  BUBBLE_PACK_DIST,
+  BUBBLE_PACK_PUSH,
+  MAX_SPECIALS_AFLOAT,
+  SPECIAL_TTL_TICKS,
   BUBBLE_LAUNCH_SPEED,
   BUBBLE_LAUNCH_TICKS,
   BUBBLE_PUFF_TICKS_PER_PIP,
@@ -88,7 +95,7 @@ import type {
 } from "./types";
 import { killEnemyByWeapon, spawnEnemy, stepEnemies } from "./enemies";
 import { stepWeapons } from "./weapons";
-import { spawnSpecial, stepSpecialsAndZones } from "./specials";
+import { activateSpecial, spawnSpecial, stepSpecialsAndZones } from "./specials";
 import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
 import { applyHookConstraint, castLine, stepHookBody, stepHookControl } from "./hook";
@@ -192,7 +199,6 @@ export function createSim(cfg: SimConfig): Sim {
     projectiles: [],
     pets: [],
     items: [],
-    specials: [],
     zones: [],
     hog: { active: false, x: 0, y: 0, vx: 0, facing: 1, ticks: 0 },
     boss: cfg.isBoss ? createBoss(cfg.world.bossId, cfg.world.bossName) : null,
@@ -394,7 +400,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       if (dx < BUBBLE_R + 4 && feetAbove && feetNear) {
         if (jump) {
           p.vy = BUBBLE_BOUNCE_VY;
-          b.rides += BUBBLE_RIDE_POPS_AT; // bouncing always bursts it
+          b.rides += 1; // survives one bounce, bursts on the second
           emit(sim, { t: "sfx", name: "bounce" });
         } else {
           p.vy = 0;
@@ -442,8 +448,14 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     p.hicPitch = 0.85 + sim.rng() * 0.35;
     // aim: whatever direction is held (8-way); nothing held = straight ahead
     let ax = left && !right ? -1 : right && !left ? 1 : 0;
-    // (grounded: no puffing into the floor you stand on - down drops out)
-    const ay = aimUp && !aimDown ? -1 : aimDown && !aimUp && !p.grounded ? 1 : 0;
+    // Down only drops out when solid ground is right under your feet (no
+    // puffing into the floor); standing on a one-way platform it fires
+    // straight through, Bubble Bobble style.
+    const onSolid =
+      p.grounded &&
+      (isSolidAt(sim.level, p.x - P_WIDTH / 2 + 2, p.y + 2) ||
+        isSolidAt(sim.level, p.x + P_WIDTH / 2 - 2, p.y + 2));
+    const ay = aimUp && !aimDown ? -1 : aimDown && !aimUp && !onSolid ? 1 : 0;
     if (ax === 0 && ay === 0) ax = p.facing;
     const alen = Math.hypot(ax, ay);
     const dx = ax / alen;
@@ -461,17 +473,40 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       rideTicks: 0,
       ridden: 0,
       wobblePhase: sim.rng() * Math.PI * 2,
+      special: null,
+      drift: 0,
+      fuse: 0,
+      fuseBy: p.index,
+      fuseCharge: 0,
     });
     emit(sim, { t: "sfx", name: "hic", pitch: p.hicPitch, pan: (p.x / FIELD_W) * 2 - 1 });
     p.anim = "blow";
     p.animLock = 14;
   }
 
-  // trapped-bubble pops by touch
+  // body vs bubbles: a trapped bubble pops on any touch; an empty one (or a
+  // special) pops when your head comes up under it, and gets nudged along
+  // when you walk into its side, so you can herd a string together before
+  // you blow it. Feet-on-top is riding, handled above.
   for (const b of sim.bubbles) {
-    if (b.state.kind !== "trapped") continue;
-    if (circleOverlapsBox(b.x, b.y, BUBBLE_R + 2, p.x, p.y, P_WIDTH + 6, P_HEIGHT)) {
+    if (b.state.kind === "launch" || b.rides >= BUBBLE_RIDE_POPS_AT) continue;
+    if (!circleOverlapsBox(b.x, b.y, BUBBLE_R + 2, p.x, p.y, P_WIDTH + 6, P_HEIGHT)) continue;
+    if (b.state.kind === "trapped") {
       popBubble(sim, b, p.index);
+      continue;
+    }
+    if (b.age < 12) continue;
+    const headY = p.y - P_HEIGHT;
+    if (p.vy < 0 && b.y < headY - BUBBLE_R * 0.2) {
+      // headbutt from below
+      popBubble(sim, b, p.index);
+      continue;
+    }
+    if (b.y > headY - BUBBLE_R * 0.5 && b.y < p.y + BUBBLE_R * 0.5) {
+      // shoulder it aside (a ridden bubble sits under the feet, not here)
+      const dir = b.x >= p.x ? 1 : -1;
+      b.x += dir * BUBBLE_NUDGE;
+      b.vx = dir * Math.max(Math.abs(b.vx), BUBBLE_NUDGE * 0.8);
     }
   }
 
@@ -599,6 +634,14 @@ export function hurtPlayer(sim: Sim, p: PlayerState): void {
 
 function stepBubble(sim: Sim, b: Bubble): boolean {
   b.age++;
+  // lit fuse: a neighbour popped, this one goes when the ripple reaches it
+  if (b.fuse > 0) {
+    b.fuse--;
+    if (b.fuse === 0) {
+      popBubble(sim, b, b.fuseBy, false, b.fuseCharge);
+      return false;
+    }
+  }
   if (b.state.kind === "launch") {
     b.state.ticks--;
     b.x += b.vx;
@@ -659,9 +702,17 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
     } else if (w === W_RIGHT) {
       tx = 1.0;
       ty = BUBBLE_RISE * 0.4;
+    } else if (b.special) {
+      // a special crosses the room on its own breeze, rising slow, and
+      // turns back at the walls so it stays reachable
+      if (b.x < BUBBLE_R + 12) b.drift = Math.abs(b.drift);
+      else if (b.x > FIELD_W - BUBBLE_R - 12) b.drift = -Math.abs(b.drift);
+      tx = b.drift;
+      ty = b.y < TILE * 2.2 ? 0 : BUBBLE_RISE * 0.3;
     } else if (b.y < TILE * 2.2) {
-      // ceiling: drift toward top center and mill around
-      tx = b.x < FIELD_W / 2 ? 0.35 : -0.35;
+      // ceiling: stop climbing and mill; a faint lean to centre keeps the
+      // string off the walls, packing (below) spreads it into a row
+      tx = b.x < FIELD_W / 2 ? 0.12 : -0.12;
       ty = 0;
     }
     if (b.ridden > 0) {
@@ -718,11 +769,85 @@ function stepBubble(sim: Sim, b: Bubble): boolean {
     }
   }
 
-  if (b.age > BUBBLE_TTL_TICKS) {
-    popBubble(sim, b, b.owner, true);
+  if (b.age > (b.special ? SPECIAL_TTL_TICKS : BUBBLE_TTL_TICKS)) {
+    // old age: quietly gone, no ripple (a special just drifts off unpopped);
+    // a still-trapped one pops properly so its varmint is not orphaned
+    if (b.state.kind === "trapped") popBubble(sim, b, b.owner, true);
+    else b.rides = BUBBLE_RIDE_POPS_AT + 99;
     return false;
   }
   return b.rides < BUBBLE_RIDE_POPS_AT && !(b.state.kind === "trapped" && b.state.ticks <= 0);
+}
+
+/** Floating bubbles shove each other apart so a string packs into a
+ *  honeycomb instead of a heap. Launch bubbles plough through and push
+ *  floaters aside without being deflected; a ridden bubble is heavy. */
+function packBubbles(sim: Sim): void {
+  const bs = sim.bubbles;
+  const d2max = BUBBLE_PACK_DIST * BUBBLE_PACK_DIST;
+  for (let i = 0; i < bs.length; i++) {
+    const a = bs[i];
+    for (let j = i + 1; j < bs.length; j++) {
+      const c = bs[j];
+      const aLaunch = a.state.kind === "launch";
+      const cLaunch = c.state.kind === "launch";
+      if (aLaunch && cLaunch) continue;
+      let dx = c.x - a.x;
+      let dy = c.y - a.y;
+      const d2 = dx * dx + dy * dy;
+      if (d2 >= d2max) continue;
+      let d = Math.sqrt(d2);
+      if (d < 0.01) {
+        // dead centre: split them by id so the result is deterministic
+        dx = a.id < c.id ? 1 : -1;
+        dy = 0;
+        d = 1;
+      }
+      const nx = dx / d;
+      const ny = dy / d;
+      const push = (BUBBLE_PACK_DIST - d) * BUBBLE_PACK_PUSH;
+      const aW = aLaunch ? 0 : a.ridden > 0 ? 0.25 : 1;
+      const cW = cLaunch ? 0 : c.ridden > 0 ? 0.25 : 1;
+      const sum = aW + cW;
+      if (sum === 0) continue;
+      const aShare = (push * aW) / sum;
+      const cShare = (push * cW) / sum;
+      // purely positional: no velocity kick, so a heap settles at touching
+      // distance (inside BUBBLE_CHAIN_DIST) instead of springing apart
+      a.x -= nx * aShare;
+      a.y -= ny * aShare;
+      c.x += nx * cShare;
+      c.y += ny * cShare;
+    }
+  }
+  for (const b of bs) {
+    if (b.y < BUBBLE_R + 2) b.y = BUBBLE_R + 2;
+    if (b.x < BUBBLE_R) b.x = BUBBLE_R;
+    else if (b.x > FIELD_W - BUBBLE_R) b.x = FIELD_W - BUBBLE_R;
+  }
+}
+
+/** Trapped varmints in the connected cluster around `root` (touching
+ *  bubbles, transitively). Decides how hard a special in the string fires. */
+function clusterCharge(sim: Sim, root: Bubble): number {
+  const d2 = BUBBLE_CHAIN_DIST * BUBBLE_CHAIN_DIST;
+  const seen = new Set<number>([root.id]);
+  const queue: Bubble[] = [root];
+  let charge = 0;
+  while (queue.length) {
+    const cur = queue.pop()!;
+    if (cur.state.kind === "trapped") charge++;
+    for (const o of sim.bubbles) {
+      if (seen.has(o.id) || o.state.kind === "launch" || o.rides >= BUBBLE_RIDE_POPS_AT) continue;
+      const dx = o.x - cur.x;
+      const dy = o.y - cur.y;
+      if (dx * dx + dy * dy <= d2) {
+        seen.add(o.id);
+        queue.push(o);
+      }
+    }
+  }
+  return charge;
 }
 
 export function popBubble(
@@ -730,9 +855,37 @@ export function popBubble(
   b: Bubble,
   by: 0 | 1,
   silent = false,
+  charge?: number,
 ): void {
+  // already popped this tick (the +99 marker below); a bubble sitting at
+  // exactly BUBBLE_RIDE_POPS_AT is the second bounce asking us to pop it
+  if (b.rides > BUBBLE_RIDE_POPS_AT) return;
+  // the first pop in a string sizes the whole string up; ripple pops inherit
+  const clusterN = charge ?? clusterCharge(sim, b);
   // remove from list lazily: mark via rides
   b.rides = BUBBLE_RIDE_POPS_AT + 99;
+  b.fuse = 0;
+
+  // light the fuse on every touching neighbour: the pop ripples outward,
+  // and the ripple keeps every trapped pop inside the chain window
+  const d2 = BUBBLE_CHAIN_DIST * BUBBLE_CHAIN_DIST;
+  for (const o of sim.bubbles) {
+    if (o === b || o.fuse > 0 || o.state.kind === "launch" || o.rides >= BUBBLE_RIDE_POPS_AT) {
+      continue;
+    }
+    const dx = o.x - b.x;
+    const dy = o.y - b.y;
+    if (dx * dx + dy * dy <= d2) {
+      o.fuse = BUBBLE_CHAIN_RIPPLE_TICKS;
+      o.fuseBy = by;
+      o.fuseCharge = clusterN;
+    }
+  }
+
+  if (b.special) {
+    activateSpecial(sim, b.special, b.x, b.y, by, clusterN);
+    return;
+  }
   if (b.state.kind === "trapped") {
     const e = sim.enemies.find(
       (en) => b.state.kind === "trapped" && en.id === b.state.enemyId,
@@ -1057,6 +1210,7 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   }
 
   sim.bubbles = sim.bubbles.filter((b) => stepBubble(sim, b));
+  packBubbles(sim);
   stepEnemies(sim);
   stepWeapons(sim);
   stepItems(sim);
@@ -1066,7 +1220,10 @@ export function step(sim: Sim, inputs: SimInputs, prevInputs: SimInputs): void {
   stepCage(sim);
 
   // specials cadence (never on boss levels' final phase; still fun mid-boss)
-  if (sim.tick >= sim.nextSpecialTick && sim.specials.length < 2) {
+  if (
+    sim.tick >= sim.nextSpecialTick &&
+    sim.bubbles.reduce((n, b) => n + (b.special ? 1 : 0), 0) < MAX_SPECIALS_AFLOAT
+  ) {
     sim.nextSpecialTick =
       sim.tick + Math.floor(SPECIAL_INTERVAL_TICKS * (0.8 + sim.rng() * 0.6));
     spawnSpecial(sim);

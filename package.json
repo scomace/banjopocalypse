@@ -11,7 +11,10 @@
     "deploy": "npm run build && npx wrangler pages deploy dist --project-name=banjopocalypse",
     "net:dev": "wrangler dev -c server/wrangler.jsonc --port 8787",
     "net:deploy": "wrangler deploy -c server/wrangler.jsonc",
-    "electron:dev": "electron electron/main.cjs"
+    "electron:dev": "electron electron/main.cjs",
+    "levels:audit": "tsx scripts/level-audit.mts",
+    "levels:check": "tsx scripts/level-drafts-check.mts",
+    "levels:promote": "tsx scripts/level-promote.mts"
   },
   "dependencies": {
     "@fontsource/press-start-2p": "^5.2.5",

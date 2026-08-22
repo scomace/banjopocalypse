@@ -108,6 +108,17 @@ export type Bubble = {
   /** Counts down while someone is aboard, so lift can account for the load. */
   ridden: number;
   wobblePhase: number;
+  /** Moonshine-set bubble: rides the same physics as every other bubble,
+   *  packs into clusters, chain-pops; its effect fires on the pop. */
+  special: SpecialKind | null;
+  /** Specials cross the screen on their own breeze (sign = direction). */
+  drift: number;
+  /** Chain-pop fuse: >0 means a neighbour popped and this one goes when it
+   *  hits zero (the ripple). fuseBy/fuseCharge carry the popper + the
+   *  cluster's trapped-varmint count along the ripple. */
+  fuse: number;
+  fuseBy: 0 | 1;
+  fuseCharge: number;
 };
 
 export type EnemyPhase =
@@ -232,16 +243,6 @@ export type Item = {
 
 export type SpecialKind = "moonshine" | "lightnin" | "skunk" | "hog" | "prayer";
 
-export type SpecialBubble = {
-  id: number;
-  kind: SpecialKind;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  age: number;
-};
-
 export type ZoneKind = "fire" | "skunk";
 
 /** Lingering area effects (moonshine cascades, skunk clouds). */
@@ -355,7 +356,6 @@ export type Sim = {
   projectiles: Projectile[];
   pets: Pet[];
   items: Item[];
-  specials: SpecialBubble[];
   zones: Zone[];
   hog: HogEntity;
   boss: BossState | null;

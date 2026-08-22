@@ -1,5 +1,6 @@
 // All 99 levels, resolved by absolute index (1..99).
 
+import { draftForLevel, draftToLevelDef, draftsEnabledInGame } from "./drafts";
 import { levelWithWorldDefaults } from "./parse";
 import type { LevelDef } from "./types";
 import { WORLDS, worldForLevel } from "./worlds";
@@ -29,12 +30,23 @@ const ALL: LevelDef[][] = [
  *  shrine level 5 or the boss level 11). Defs can override via `secondPour`. */
 export const SECOND_POUR_LEVELS_IN_WORLD = [3, 7, 10];
 
-export function getLevelDef(levelIndex1: number): LevelDef {
+/** The authored def only: never a draft. What the editor diffs against. */
+export function getAuthoredLevelDef(levelIndex1: number): LevelDef {
   const idx = Math.max(1, Math.min(99, levelIndex1));
   const world = worldForLevel(idx);
   const inWorld = (idx - 1) % 11;
   const defs = ALL[world.index - 1];
-  const def = defs[Math.min(inWorld, defs.length - 1)];
+  return defs[Math.min(inWorld, defs.length - 1)];
+}
+
+export function getLevelDef(levelIndex1: number): LevelDef {
+  const idx = Math.max(1, Math.min(99, levelIndex1));
+  const world = worldForLevel(idx);
+  const inWorld = (idx - 1) % 11;
+  // A registered draft (dev server / editor / --drafts scripts) wins over the
+  // authored grid; see drafts.ts.
+  const draft = draftsEnabledInGame() ? draftForLevel(idx) : undefined;
+  const def = draft ? draftToLevelDef(draft) : getAuthoredLevelDef(idx);
   // Cadence keys off the absolute slot, not the def: short worlds reuse their
   // last def for several slots and the pour must not leak with it.
   const secondPour = def.secondPour ?? SECOND_POUR_LEVELS_IN_WORLD.includes(inWorld + 1);

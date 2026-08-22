@@ -13,9 +13,19 @@
 // loops it until the level index changes. The track is routed through the
 // music bus, so the volume slider applies and the Mega-Belch still
 // sidechain-ducks it for half a second.
+//
+// Loudness: every playSfx call runs through one per-sound "voice" gain whose
+// value comes from sfx-trim.json (the mixer at /admin/sfx writes it). The
+// numbers inside each case are the sound's internal balance; the trim is the
+// one knob that sets how loud that sound sits against the others. Tune trims
+// on the board, not by re-deriving three node gains per sound.
 
 import type { FxEvent, Sim } from "../sim/types";
 import { loadSettings } from "../core/save";
+import SFX_TRIM_JSON from "./sfx-trim.json";
+
+/** Authored per-sound loudness trims (linear gain, 1 = as designed). */
+export const SFX_TRIM: Readonly<Record<string, number>> = SFX_TRIM_JSON;
 
 // Everything in public/music. Vite can't glob the public dir, so the list
 // lives here; add new files to both places.
@@ -37,32 +47,79 @@ function midiToFreq(m: number): number {
   return 440 * Math.pow(2, (m - 69) / 12);
 }
 
+/** Scale a buffer in place so its RMS hits `targetRms`, never letting the
+ *  peak exceed `peakCap`. Returns the scale applied. */
+export function normalizeRms(buf: AudioBuffer, targetRms: number, peakCap: number): number {
+  let sum = 0;
+  let n = 0;
+  let peak = 0;
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < d.length; i++) {
+      const v = d[i];
+      sum += v * v;
+      peak = Math.max(peak, Math.abs(v));
+    }
+    n += d.length;
+  }
+  const rms = n ? Math.sqrt(sum / n) : 0;
+  if (rms < 1e-5 || peak < 1e-5) return 1;
+  const sc = Math.min(targetRms / rms, peakCap / peak);
+  for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+    const d = buf.getChannelData(ch);
+    for (let i = 0; i < d.length; i++) d[i] *= sc;
+  }
+  return sc;
+}
+
 /**
  * Sampled one-shots. To add one: drop an mp3/wav in public/sounds, add a
  * line here, and play it from a playSfx case via this.playSample(name, ...).
- * The engine fetches, peak-normalizes and trims each file at load. A missing
- * or broken file is NOT an error: playSample returns false and the case
- * falls back to synth, so the game sounds right before the recording lands.
- *   gain: playback level (post-normalize)   cut: cap on played length, s
+ * The engine fetches, loudness-normalizes and trims each file at load. A
+ * missing or broken file is NOT an error: playSample returns false and the
+ * case falls back to synth, so the game sounds right before the recording
+ * lands. Balance a sample against the rest on /admin/sfx (the trim table),
+ * not here.
+ *   gain: playback level (post-normalize; default 1; only for a sample that
+ *         layers under synth and must sit below it by design)
+ *   cut:  cap on played length, s
  *   fade: fade-out length before the cut, s (default 0.03)
  */
 const SAMPLE_SFX: Record<string, { file: string; gain?: number; cut?: number; fade?: number }> = {
   /** gassed out: the hiccup that ate the double jump */
-  windFail: { file: "wind-fail.mp3", gain: 0.8 },
+  windFail: { file: "wind-fail.mp3" },
   /** last pips of wind: the wheeze under the jump */
-  windStrain: { file: "wind-strain.mp3", gain: 0.5 },
+  windStrain: { file: "wind-strain.mp3" },
   /** Granny Mae's air special: the bean-powered scoot. The recording has a
    *  ~230ms room tail after its ~160ms body; cut it off so it reads dry. */
-  fart: { file: "fart.mp3", gain: 0.8, cut: 0.2, fade: 0.05 },
+  fart: { file: "fart.mp3", cut: 0.2, fade: 0.05 },
   /** Granny Mae gassed out: the whiff when the beans run dry */
-  wetfart: { file: "wetfart.mp3", gain: 0.8 },
+  wetfart: { file: "wetfart.mp3" },
   /** the hog stampede special popping */
-  hogSqueal: { file: "pigsqueal.mp3", gain: 0.8 },
+  hogSqueal: { file: "pigsqueal.mp3" },
 };
 
+/**
+ * Sample normalization target: RMS over the non-silent body, in linear
+ * amplitude (0.18 ~ -15 dBFS). Peak normalization was the old rule, but peak
+ * says nothing about loudness: a spiky click and a sustained squeal both
+ * peaked at 0.9 and sounded a world apart. RMS gets recordings to land at a
+ * consistent perceived level before any trim applies. The peak is still
+ * capped so a very spiky file can't clip (it then lands a bit quiet, and the
+ * trim table makes up the difference).
+ */
+const SAMPLE_TARGET_RMS = 0.18;
+const SAMPLE_PEAK_CAP = 0.95;
+
 export class JugBandAudio {
-  private ctx: AudioContext | null = null;
+  private ctx: BaseAudioContext | null = null;
   private master!: GainNode;
+  /** Per-sound loudness trims, live copy (the mixer edits these at runtime). */
+  private trims: Record<string, number> = { ...SFX_TRIM };
+  /** The voice gain of the playSfx call in flight; helpers route into it. */
+  private voice: GainNode | null = null;
+  /** Resolves once the sampled one-shots (and the burp) are loaded. */
+  ready: Promise<void> = Promise.resolve();
   private musicBus!: GainNode;
   private musicDuck!: GainNode;
   private sfxBus!: GainNode;
@@ -82,14 +139,34 @@ export class JugBandAudio {
   musicVolume = 0.7;
   sfxVolume = 0.9;
 
+  /**
+   * The game uses the `audio` singleton (no argument: a real AudioContext is
+   * created on the first user gesture). Pass an OfflineAudioContext to get a
+   * private engine that renders into it: the mixer uses this to measure
+   * sounds (see sfxMeter.ts). Buses are set up immediately in that case.
+   */
+  constructor(offline?: OfflineAudioContext) {
+    if (offline) {
+      this.setup(offline);
+      this.setVolumes(0, 1);
+    }
+  }
+
   /** Must be called from a user gesture at least once. Safe to call often. */
-  ensure(): AudioContext | null {
+  ensure(): BaseAudioContext | null {
     if (this.ctx) {
-      if (this.ctx.state === "suspended") void this.ctx.resume();
+      if (this.ctx instanceof AudioContext && this.ctx.state === "suspended") void this.ctx.resume();
       return this.ctx;
     }
     try {
-      const ctx = new AudioContext();
+      return this.setup(new AudioContext());
+    } catch {
+      return null;
+    }
+  }
+
+  private setup(ctx: BaseAudioContext): BaseAudioContext {
+    {
       this.ctx = ctx;
       const settings = loadSettings();
       this.musicVolume = settings.musicVolume;
@@ -117,12 +194,30 @@ export class JugBandAudio {
       this.noiseBuf = ctx.createBuffer(1, len, ctx.sampleRate);
       const data = this.noiseBuf.getChannelData(0);
       for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
-      void this.loadBurp(ctx);
-      void this.loadSamples(ctx);
+      this.ready = Promise.all([this.loadBurp(ctx), this.loadSamples(ctx)]).then(() => undefined);
       return ctx;
-    } catch {
-      return null;
     }
+  }
+
+  // ------------------------------------------------------- trims
+  // Live per-sound loudness trims. The mixer (/admin/sfx) drives these while
+  // auditioning and writes the result to sfx-trim.json; the game just reads
+  // the table at boot.
+
+  getTrim(name: string): number {
+    return this.trims[name] ?? 1;
+  }
+
+  getTrims(): Record<string, number> {
+    return { ...this.trims };
+  }
+
+  setTrim(name: string, gain: number): void {
+    this.trims[name] = Math.max(0, gain);
+  }
+
+  setTrims(table: Record<string, number>): void {
+    this.trims = { ...table };
   }
 
   setVolumes(music: number, sfx: number): void {
@@ -145,46 +240,58 @@ export class JugBandAudio {
   // trim the dead air.
 
   /**
-   * Fetch + decode a sample from public/sounds, peak-normalize it to 0.9
-   * (so gain math downstream means what it says; recordings land at all
-   * levels) and trim leading/trailing silence (leading silence reads as
-   * input lag). Null if the file is missing or undecodable.
+   * Fetch + decode a sample from public/sounds, trim leading/trailing silence
+   * (leading silence reads as input lag) and loudness-normalize the body to
+   * SAMPLE_TARGET_RMS with the peak capped at SAMPLE_PEAK_CAP, so recordings
+   * that land at all levels come out at one perceived level and the gain
+   * math downstream means what it says. Null if the file is missing or
+   * undecodable.
    */
-  private async loadSampleBuffer(ctx: AudioContext, file: string): Promise<AudioBuffer | null> {
+  private async loadSampleBuffer(ctx: BaseAudioContext, file: string): Promise<AudioBuffer | null> {
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}sounds/${file}`);
       if (!res.ok) return null;
       const buf = await ctx.decodeAudioData(await res.arrayBuffer());
+      // trim against a threshold relative to the file's own peak, so a quiet
+      // recording isn't eaten whole
       let peak = 0;
       for (let ch = 0; ch < buf.numberOfChannels; ch++) {
         const d = buf.getChannelData(ch);
         for (let i = 0; i < d.length; i++) peak = Math.max(peak, Math.abs(d[i]));
       }
-      if (peak > 0.001) {
-        const sc = 0.9 / peak;
-        for (let ch = 0; ch < buf.numberOfChannels; ch++) {
-          const d = buf.getChannelData(ch);
-          for (let i = 0; i < d.length; i++) d[i] *= sc;
-        }
-      }
+      const silent = Math.max(0.0005, peak * 0.022);
       const d0 = buf.getChannelData(0);
       let start = 0;
-      while (start < d0.length && Math.abs(d0[start]) < 0.02) start++;
+      while (start < d0.length && Math.abs(d0[start]) < silent) start++;
       start = Math.max(0, start - Math.floor(buf.sampleRate * 0.002));
       let end = d0.length - 1;
-      while (end > start && Math.abs(d0[end]) < 0.02) end--;
+      while (end > start && Math.abs(d0[end]) < silent) end--;
       end = Math.min(d0.length, end + Math.floor(buf.sampleRate * 0.015));
       const trimmed = ctx.createBuffer(buf.numberOfChannels, Math.max(1, end - start), buf.sampleRate);
       for (let ch = 0; ch < buf.numberOfChannels; ch++) {
         trimmed.getChannelData(ch).set(buf.getChannelData(ch).subarray(start, end));
       }
+      normalizeRms(trimmed, SAMPLE_TARGET_RMS, SAMPLE_PEAK_CAP);
       return trimmed;
     } catch {
       return null;
     }
   }
 
-  private async loadSamples(ctx: AudioContext): Promise<void> {
+  /**
+   * Share another engine's decoded samples instead of fetching again
+   * (AudioBuffers aren't tied to a context). The mixer's offline render
+   * engines adopt from one donor so measuring 80 sounds doesn't decode the
+   * burp 80 times. Call after `await donor.ready`.
+   */
+  adoptSamples(donor: JugBandAudio): void {
+    this.samples = new Map(donor.samples);
+    this.burpBuf = donor.burpBuf;
+    this.burpBufRev = donor.burpBufRev;
+    this.ready = Promise.resolve();
+  }
+
+  private async loadSamples(ctx: BaseAudioContext): Promise<void> {
     await Promise.all(
       Object.entries(SAMPLE_SFX).map(async ([name, def]) => {
         const buf = await this.loadSampleBuffer(ctx, def.file);
@@ -206,7 +313,7 @@ export class JugBandAudio {
     src.buffer = buf;
     src.playbackRate.value = pitch;
     const g = ctx.createGain();
-    const gain = def.gain ?? 0.7;
+    const gain = def.gain ?? 1;
     g.gain.setValueAtTime(gain, when);
     const natural = buf.duration / pitch;
     const len = def.cut ? Math.min(natural, def.cut) : natural;
@@ -217,13 +324,13 @@ export class JugBandAudio {
     panner.pan.value = Math.max(-1, Math.min(1, pan)) * 0.6;
     src.connect(g);
     g.connect(panner);
-    panner.connect(this.sfxBus);
+    panner.connect(this.out());
     src.start(when);
     src.stop(when + len + 0.02);
     return true;
   }
 
-  private async loadBurp(ctx: AudioContext): Promise<void> {
+  private async loadBurp(ctx: BaseAudioContext): Promise<void> {
     const trimmed = await this.loadSampleBuffer(ctx, "cuteburp.mp3");
     if (!trimmed) return; // no burp asset: the synth hic carries on alone
     this.burpBuf = trimmed;
@@ -287,7 +394,7 @@ export class JugBandAudio {
     src.connect(lp);
     lp.connect(g);
     g.connect(panner);
-    panner.connect(this.sfxBus);
+    panner.connect(this.out());
 
     // always cut at `len` with a quick fade so every burp stays snappy
     const cut = when + len;
@@ -303,7 +410,7 @@ export class JugBandAudio {
       dg.gain.value = 0.3;
       panner.connect(d);
       d.connect(dg);
-      dg.connect(this.sfxBus);
+      dg.connect(this.out());
     }
 
     src.start(when);
@@ -339,7 +446,7 @@ export class JugBandAudio {
     g.gain.exponentialRampToValueAtTime(0.001, when + dur);
     src.connect(f);
     f.connect(g);
-    g.connect(bus ?? this.sfxBus);
+    g.connect(bus ?? this.out());
     src.start(when, Math.random() * 0.5);
     src.stop(when + dur + 0.02);
   }
@@ -383,7 +490,7 @@ export class JugBandAudio {
     g.gain.exponentialRampToValueAtTime(gain, when + attack);
     g.gain.exponentialRampToValueAtTime(0.001, when + dur);
     o.connect(g);
-    g.connect(opts?.bus ?? this.sfxBus);
+    g.connect(opts?.bus ?? this.out());
     o.start(when);
     o.stop(when + dur + 0.03);
   }
@@ -429,7 +536,7 @@ export class JugBandAudio {
     const g = ctx.createGain();
     g.gain.value = gain;
     src.connect(g);
-    g.connect(bus ?? this.musicBus);
+    g.connect(bus ?? this.out());
     src.start(when);
   }
 
@@ -453,6 +560,25 @@ export class JugBandAudio {
     const ctx = this.ensure();
     if (!ctx || this.muted) return;
     const t = now ?? ctx.currentTime;
+    // one voice gain per call: the sound's loudness trim, and the bus every
+    // helper lands on while this call runs (see out())
+    const voice = ctx.createGain();
+    voice.gain.value = this.getTrim(name);
+    voice.connect(this.sfxBus);
+    this.voice = voice;
+    try {
+      this.synth(name, pitch, t, pan);
+    } finally {
+      this.voice = null;
+    }
+  }
+
+  /** Where a helper's output goes: the current voice, else straight to the bus. */
+  private out(): GainNode {
+    return this.voice ?? this.sfxBus;
+  }
+
+  private synth(name: string, pitch: number, t: number, pan: number): void {
     switch (name) {
       case "hic": {
         // tiny glottal blip: pitch-varied per blow. When the sampled burp is
@@ -505,14 +631,14 @@ export class JugBandAudio {
       }
       case "frenzyStart":
         for (let i = 0; i < 5; i++) {
-          this.banjo(t + i * 0.05, 57 + [0, 4, 7, 12, 16][i], 0.5, this.sfxBus);
+          this.banjo(t + i * 0.05, 57 + [0, 4, 7, 12, 16][i], 0.5);
         }
         break;
       case "frenzyEnd":
         this.tone(t, 0.4, 400, "sine", 0.12, { endFreq: 120 });
         break;
       case "food":
-        this.banjo(t, 76 + Math.round((pitch - 1) * 12), 0.35, this.sfxBus);
+        this.banjo(t, 76 + Math.round((pitch - 1) * 12), 0.35);
         break;
       case "letter":
         this.tone(t, 0.3, 1046, "sine", 0.16);
@@ -520,46 +646,46 @@ export class JugBandAudio {
         break;
       // menu cursor: short banjo plucks so the shell sounds like the band
       case "menu:move":
-        this.banjo(t, 64, 0.18, this.sfxBus);
+        this.banjo(t, 64, 0.18);
         break;
       case "menu:tick":
-        this.banjo(t, 71, 0.14, this.sfxBus);
+        this.banjo(t, 71, 0.14);
         break;
       case "menu:accept":
-        this.banjo(t, 76, 0.3, this.sfxBus);
-        this.banjo(t + 0.06, 83, 0.22, this.sfxBus);
+        this.banjo(t, 76, 0.3);
+        this.banjo(t + 0.06, 83, 0.22);
         break;
       case "menu:back":
-        this.banjo(t, 67, 0.22, this.sfxBus);
-        this.banjo(t + 0.07, 60, 0.18, this.sfxBus);
+        this.banjo(t, 67, 0.22);
+        this.banjo(t + 0.07, 60, 0.18);
         break;
       case "menu:nope":
         this.noise(t, 0.06, 900, 3, 0.16);
-        this.banjo(t + 0.02, 52, 0.2, this.sfxBus);
+        this.banjo(t + 0.02, 52, 0.2);
         break;
       case "extraLife": {
         const notes = [64, 67, 71, 76];
-        notes.forEach((n, i) => this.banjo(t + i * 0.09, n, 0.5, this.sfxBus));
+        notes.forEach((n, i) => this.banjo(t + i * 0.09, n, 0.5));
         this.tone(t + 0.36, 0.5, midiToFreq(88), "triangle", 0.15);
         break;
       }
       case "yeehawComplete": {
         const roll = [57, 64, 69, 73, 76, 81];
-        roll.forEach((n, i) => this.banjo(t + i * 0.06, n, 0.55, this.sfxBus));
+        roll.forEach((n, i) => this.banjo(t + i * 0.06, n, 0.55));
         break;
       }
       case "weaponAcquired": {
         // shrine reveal: a gospel swell under a climbing banjo roll, then a shimmer
         this.gospelChord(t, [55, 62, 67, 71, 74, 79], 2.2, 0.18);
         const roll = [55, 62, 67, 71, 74, 79, 83, 86];
-        roll.forEach((n, i) => this.banjo(t + 0.08 + i * 0.07, n, 0.6, this.sfxBus));
+        roll.forEach((n, i) => this.banjo(t + 0.08 + i * 0.07, n, 0.6));
         this.tone(t + 0.6, 1.2, midiToFreq(91), "triangle", 0.12, { endFreq: midiToFreq(98) });
         break;
       }
       case "playerDie": {
         // sad solo banjo bend
         this.tone(t, 0.7, 330, "sawtooth", 0.2, { endFreq: 110 });
-        this.banjo(t + 0.25, 45, 0.5, this.sfxBus);
+        this.banjo(t + 0.25, 45, 0.5);
         break;
       }
       case "revive":
@@ -584,15 +710,15 @@ export class JugBandAudio {
         // still-alarm: three descending banjo stabs over pounding knocks,
         // capped with a pressure-drop groan
         for (let i = 0; i < 3; i++) {
-          this.banjo(t + i * 0.14, 64 - i * 5, 0.6, this.sfxBus);
+          this.banjo(t + i * 0.14, 64 - i * 5, 0.6);
           this.noise(t + i * 0.14, 0.1, 220, 1, 0.35, "lowpass");
         }
         this.tone(t + 0.45, 0.5, 130, "sawtooth", 0.25, { endFreq: 55 });
         break;
       }
       case "twang":
-        this.banjo(t, 45, 0.7, this.sfxBus);
-        this.banjo(t + 0.02, 52, 0.6, this.sfxBus);
+        this.banjo(t, 45, 0.7);
+        this.banjo(t + 0.02, 52, 0.6);
         break;
       case "jugThrow":
         this.noise(t, 0.12, 800, 1.4, 0.12);
@@ -740,7 +866,7 @@ export class JugBandAudio {
       case "bossDown":
       case "bossDefeat": {
         const notes = [45, 52, 57, 61, 64, 69];
-        notes.forEach((n, i) => this.banjo(t + i * 0.08, n, 0.6, this.sfxBus));
+        notes.forEach((n, i) => this.banjo(t + i * 0.08, n, 0.6));
         this.noise(t, 0.8, 300, 0.7, 0.35, "lowpass");
         break;
       }
@@ -776,10 +902,10 @@ export class JugBandAudio {
         this.fiddleNoteSfx(t, 76, 0.25);
         break;
       case "noteReturn":
-        this.banjo(t, 69 + Math.round((pitch - 1) * 10), 0.7, this.sfxBus);
+        this.banjo(t, 69 + Math.round((pitch - 1) * 10), 0.7);
         break;
       case "noteHit":
-        this.banjo(t, 81, 0.6, this.sfxBus);
+        this.banjo(t, 81, 0.6);
         break;
       // Buford's Fishin' Line
       case "castLine":
@@ -790,7 +916,7 @@ export class JugBandAudio {
       case "lineTaut":
         // line snaps tight: low twang
         this.tone(t, 0.12, 180, "triangle", 0.22, { endFreq: 120 });
-        this.banjo(t, 50, 0.35, this.sfxBus);
+        this.banjo(t, 50, 0.35);
         break;
       case "lineSlack":
         this.noise(t, 0.06, 1400, 2, 0.08);
@@ -806,7 +932,7 @@ export class JugBandAudio {
         break;
       case "levelClear": {
         const tag = [57, 61, 64, 69];
-        tag.forEach((n, i) => this.banjo(t + i * 0.07, n, 0.5, this.sfxBus));
+        tag.forEach((n, i) => this.banjo(t + i * 0.07, n, 0.5));
         break;
       }
       default:
@@ -840,7 +966,7 @@ export class JugBandAudio {
    *  whenever the level index changes and keeps it looping until then. */
   tickMusic(sim: Sim): void {
     const ctx = this.ctx;
-    if (!ctx || this.muted) return;
+    if (!(ctx instanceof AudioContext) || this.muted) return;
 
     if (sim.levelIndex !== this.trackLevel) {
       this.trackLevel = sim.levelIndex;

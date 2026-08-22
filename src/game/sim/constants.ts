@@ -137,6 +137,20 @@ export const BUBBLE_RIDE_POPS_AT = 2;
 export const BUBBLE_RIDE_TICKS = 100;
 export const BUBBLE_BOUNCE_VY = -12.0; // ~5.4 tiles: the two-tier bubble launch
 export const CHAIN_WINDOW_TICKS = 30; // 0.5s
+/** Floating bubbles shove each other apart below this centre distance, so a
+ *  string packs into a honeycomb instead of one overlapping blob. */
+export const BUBBLE_PACK_DIST = BUBBLE_R * 1.9;
+export const BUBBLE_PACK_PUSH = 0.3; // fraction of the overlap resolved per tick
+/** Bubbles whose centres are this close are "touching": popping one lights
+ *  the fuse on the other (Bubble Bobble's adjacency chain). */
+export const BUBBLE_CHAIN_DIST = BUBBLE_R * 2 + 6;
+export const BUBBLE_CHAIN_RIPPLE_TICKS = 3; // fuse length: the pop ripples outward
+/** A player's head coming up under a bubble pops it; walking into its side
+ *  nudges it along (herding trapped varmints into one string). */
+export const BUBBLE_NUDGE = 1.1;
+export const SPECIAL_TTL_TICKS = 22 * TICK_HZ;
+export const SPECIAL_DRIFT = 0.6;
+export const MAX_SPECIALS_AFLOAT = 2;
 
 // --- enemies ---
 export const E_GRAVITY = 0.3;

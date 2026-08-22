@@ -256,12 +256,31 @@ export class PlayScene extends Phaser.Scene {
 
     // bubbles
     for (const b of sim.bubbles) {
+      if (b.special) {
+        // moonshine special: gold shell + icon, same size as its neighbours
+        const shell = this.obtain(`sb${b.id}`, "bubble:special", 44);
+        shell.setPosition(Math.round(b.x), Math.round(b.y));
+        const sc = ((BUBBLE_R + 2) / 16) * (1 + Math.sin(b.age / 16) * 0.04);
+        shell.setScale(sc);
+        shell.setAlpha(b.fuse > 0 ? 1 : 0.95);
+        if (b.fuse > 0) shell.setTint(0xffffff);
+        else shell.clearTint();
+        const icon = this.obtain(`spi${b.id}`, `s:${b.special}#0`, 45);
+        icon.setPosition(Math.round(b.x), Math.round(b.y));
+        icon.setScale(1.15);
+        icon.setOrigin(0.5, 0.5);
+        continue;
+      }
       const key = `b${b.id}`;
       const s = this.obtain(key, `bubble:p${b.owner}`, 40);
       const squish = b.state.kind === "launch" ? 0.85 : 1 + Math.sin((b.age + b.wobblePhase * 30) / 14) * 0.05;
       s.setPosition(Math.round(b.x), Math.round(b.y));
       s.setScale((BUBBLE_R / 16) * (b.state.kind === "launch" ? 1.1 : 1), (BUBBLE_R / 16) * squish);
-      if (b.state.kind === "trapped") {
+      if (b.fuse > 0) {
+        // fuse lit: flash white for the ripple
+        s.setAlpha(1);
+        s.setTint(0xffffff);
+      } else if (b.state.kind === "trapped") {
         s.setAlpha(0.95);
         // wobble faster as escape nears
         if (b.state.ticks < 90 && t % 10 < 5) s.setTint(0xff8080);
@@ -517,18 +536,6 @@ export class PlayScene extends Phaser.Scene {
         txt.setPosition(Math.round(it.x), Math.round(it.y + bob));
         txt.setAlpha(it.ttl < 120 && t % 12 < 6 ? 0.4 : 1);
       }
-    }
-
-    // specials: gold bubble + icon
-    for (const sp of sim.specials) {
-      const shell = this.obtain(`sp${sp.id}`, "bubble:special", 44);
-      shell.setPosition(Math.round(sp.x), Math.round(sp.y));
-      shell.setScale(1.35 + Math.sin(sp.age / 16) * 0.06);
-      shell.setAlpha(0.95);
-      const icon = this.obtain(`spi${sp.id}`, `s:${sp.kind}#0`, 45);
-      icon.setPosition(Math.round(sp.x), Math.round(sp.y));
-      icon.setScale(1.6);
-      icon.setOrigin(0.5, 0.5);
     }
 
     // hog

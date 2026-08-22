@@ -32,6 +32,7 @@ load (`src/aachar/baker.ts`).
 - `/#/admin/aachar` full character editor (saves via the vite plugin)
 - `/#/admin/exclaim` comic burst lab
 - `/#/admin/baker` bake QA: live rig vs baked sheets
+- `/#/admin/sfx` SFX mixer: audition every sound back to back, set per-sound loudness trims (live), measure them offline, Save writes `src/game/audio/sfx-trim.json` (via the vite plugin; the table ships with the game). `node scripts/qa-sfx.mjs` drives it headless (measures everything, round-trips a save; needs the dev server on 5199)
 - `?quickstart=1&cast=earl&level=12&seed=5` jump straight into a run
 - `npx tsx scripts/sim-smoke.mts` headless sim torture test
 - `node scripts/qa-wind.mjs` browser QA for wind (air-special stamina): pips drain, a gassed press stumbles, screenshot in `qa-wind.png` (needs `vite --port 5200`)

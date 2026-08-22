@@ -1,20 +1,26 @@
-// The moonshine set: drifting special bubbles with level-wide effects, plus
-// the lingering zones they leave behind (fire cascades, skunk clouds) and the
-// wild hog. Popping one triggers THE BELCH RULE: Mega-Belch SFX + belch
-// animation + a BRAAAP exclaim burst on the popper. Spiky shapes come from
-// the exclaim system only, never speech balloons.
+// The moonshine set: special bubbles with level-wide effects, plus the
+// lingering zones they leave behind (fire cascades, skunk clouds) and the
+// wild hog. A special is a real bubble (sim.bubbles with `special` set): it
+// rides the wind, packs into strings with the rest, can be stood on, nudged
+// and chain-popped. Popping one triggers THE BELCH RULE: Mega-Belch SFX +
+// belch animation + a BRAAAP exclaim burst on the popper. Spiky shapes come
+// from the exclaim system only, never speech balloons.
+//
+// CHARGE: a special that goes up in a string of trapped varmints fires
+// bigger. `charge` = trapped bubbles in the cluster that detonated it.
 
 import { pick } from "../core/rng";
 import {
+  BUBBLE_R,
   FIELD_H,
   FIELD_W,
   P_HEIGHT,
-  P_WIDTH,
+  SPECIAL_DRIFT,
   TICK_HZ,
   TILE,
 } from "./constants";
 import { circleOverlapsBox, tileAt } from "./physics";
-import type { SpecialBubble, SpecialKind, Sim, Zone } from "./types";
+import type { SpecialKind, Sim, Zone } from "./types";
 import { emit } from "./sim";
 import { killEnemyByWeapon } from "./enemies";
 
@@ -26,21 +32,40 @@ const SPECIAL_KINDS: SpecialKind[] = [
   "prayer",
 ];
 
+/** A special drifts in from one side at mid-height as a floating bubble. */
 export function spawnSpecial(sim: Sim): void {
   const kind = pick(sim.rng, SPECIAL_KINDS);
   const fromLeft = sim.rng() < 0.5;
-  sim.specials.push({
+  const drift = (fromLeft ? 1 : -1) * SPECIAL_DRIFT;
+  sim.bubbles.push({
     id: sim.nextId++,
-    kind,
-    x: fromLeft ? -16 : FIELD_W + 16,
+    owner: 0,
+    x: fromLeft ? BUBBLE_R + 6 : FIELD_W - BUBBLE_R - 6,
     y: 70 + sim.rng() * (FIELD_H - 220),
-    vx: (fromLeft ? 1 : -1) * (0.55 + sim.rng() * 0.3),
+    vx: drift,
     vy: 0,
+    state: { kind: "float" },
     age: 0,
+    rides: 0,
+    rideTicks: 0,
+    ridden: 0,
+    wobblePhase: sim.rng() * Math.PI * 2,
+    special: kind,
+    drift,
+    fuse: 0,
+    fuseBy: 0,
+    fuseCharge: 0,
   });
 }
 
-function activateSpecial(sim: Sim, s: SpecialBubble, by: 0 | 1): void {
+export function activateSpecial(
+  sim: Sim,
+  kind: SpecialKind,
+  x: number,
+  y: number,
+  by: 0 | 1,
+  charge: number,
+): void {
   const popper = sim.players.find((p) => p.index === by);
   // THE BELCH RULE — every special activation is a huge belch from the popper.
   emit(sim, { t: "belch", player: by });
@@ -57,19 +82,24 @@ function activateSpecial(sim: Sim, s: SpecialBubble, by: 0 | 1): void {
       palette: "toxic",
     });
   }
+  if (charge >= 2) {
+    emit(sim, { t: "burst", text: `CHARGED x${charge}!`, x, y: y - 30, big: charge >= 3 });
+  }
 
-  switch (s.kind) {
+  switch (kind) {
     case "moonshine": {
-      // flaming flood cascades down from the pop point
-      for (let i = 0; i < 5; i++) {
+      // flaming flood cascades down from the pop point; a charged one runs
+      // deeper and burns longer
+      const rows = Math.min(11, 5 + charge * 2);
+      for (let i = 0; i < rows; i++) {
         sim.zones.push({
           id: sim.nextId++,
           kind: "fire",
-          x: s.x - TILE * (2 + i),
-          y: Math.min(FIELD_H - 10, s.y + i * TILE),
+          x: x - TILE * (2 + i),
+          y: Math.min(FIELD_H - 10, y + i * TILE),
           w: TILE * (4 + i * 2),
           h: 14,
-          ticks: Math.floor(2.5 * TICK_HZ) + i * 12,
+          ticks: Math.floor(2.5 * TICK_HZ) + i * 12 + charge * 20,
           spreading: true,
         });
       }
@@ -78,27 +108,29 @@ function activateSpecial(sim: Sim, s: SpecialBubble, by: 0 | 1): void {
       break;
     }
     case "lightnin": {
-      // bolt across the pop row
+      // bolt across the pop row; charged bolts fan out into the rows around
+      const band = TILE * (1.3 + 0.9 * charge);
       for (const e of sim.enemies) {
         if (e.phase.kind === "dying") continue;
-        if (Math.abs(e.y - s.y) < TILE * 1.3) {
+        if (Math.abs(e.y - y) < band) {
           killEnemyByWeapon(sim, e, by, 99);
         }
       }
       emit(sim, { t: "sfx", name: "lightninJar" });
       emit(sim, { t: "flash", color: 0x80d8ff });
-      emit(sim, { t: "shake", power: 5 });
+      emit(sim, { t: "shake", power: 5 + charge });
       break;
     }
     case "skunk": {
+      const grow = 1 + 0.35 * charge;
       sim.zones.push({
         id: sim.nextId++,
         kind: "skunk",
-        x: s.x - TILE * 2.5,
-        y: s.y - TILE * 1.5,
-        w: TILE * 5,
-        h: TILE * 3,
-        ticks: 6 * TICK_HZ,
+        x: x - TILE * 2.5 * grow,
+        y: y - TILE * 1.5 * grow,
+        w: TILE * 5 * grow,
+        h: TILE * 3 * grow,
+        ticks: 6 * TICK_HZ + Math.floor(charge * 1.5 * TICK_HZ),
         spreading: false,
       });
       emit(sim, { t: "sfx", name: "skunk" });
@@ -107,10 +139,10 @@ function activateSpecial(sim: Sim, s: SpecialBubble, by: 0 | 1): void {
     case "hog": {
       sim.hog = {
         active: true,
-        x: s.x < FIELD_W / 2 ? -30 : FIELD_W + 30,
+        x: x < FIELD_W / 2 ? -30 : FIELD_W + 30,
         y: FIELD_H - TILE,
-        vx: s.x < FIELD_W / 2 ? 3.4 : -3.4,
-        facing: s.x < FIELD_W / 2 ? 1 : -1,
+        vx: (x < FIELD_W / 2 ? 1 : -1) * (3.4 + 0.6 * charge),
+        facing: x < FIELD_W / 2 ? 1 : -1,
         ticks: 0,
       };
       emit(sim, { t: "sfx", name: "hogSqueal" });
@@ -119,30 +151,13 @@ function activateSpecial(sim: Sim, s: SpecialBubble, by: 0 | 1): void {
     }
     case "prayer": {
       for (const p of sim.players) {
-        if (p.alive) p.prayer = 5 * TICK_HZ;
+        if (p.alive) p.prayer = (5 + 2 * charge) * TICK_HZ;
       }
       emit(sim, { t: "sfx", name: "gospel" });
       emit(sim, { t: "flash", color: 0xfff2b0 });
       break;
     }
   }
-}
-
-function stepSpecial(sim: Sim, s: SpecialBubble): boolean {
-  s.age++;
-  s.x += s.vx + Math.sin((s.age + s.id * 29) / 38) * 0.25;
-  s.y += Math.sin((s.age + s.id * 47) / 30) * 0.45;
-  // leave the screen eventually
-  if (s.x < -40 || s.x > FIELD_W + 40) return false;
-
-  for (const p of sim.players) {
-    if (!p.alive) continue;
-    if (circleOverlapsBox(s.x, s.y, 18, p.x, p.y, P_WIDTH + 6, P_HEIGHT)) {
-      activateSpecial(sim, s, p.index);
-      return false;
-    }
-  }
-  return true;
 }
 
 function stepZone(sim: Sim, z: Zone): boolean {
@@ -206,7 +221,6 @@ function stepHog(sim: Sim): void {
 }
 
 export function stepSpecialsAndZones(sim: Sim): void {
-  sim.specials = sim.specials.filter((s) => stepSpecial(sim, s));
   sim.zones = sim.zones.filter((z) => stepZone(sim, z));
   stepHog(sim);
 
