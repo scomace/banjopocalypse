@@ -23,11 +23,13 @@ export type CastMember = {
    *                scramble that keeps his momentum and boosts it
    *  - "fart":     Granny Mae's bean-powered sideways scoot
    *  - "jugblast": Cooter belches lit moonshine downward: rocket up, singe below
-   *  - "recoil":   Bobbie Sue fires the scattergun straight down, kick = jump
+   *  - "sputter":  Bobbie Sue putt-putts the scattergun downward: unlimited
+   *                presses, finite wind — a hover-and-drift on a rain of pellets
    *  - "glide":    Darlene's possum stretches into a chute; hold JUMP to drift
-   *  - "bolt":     Grandpappy Zeke calls lightning strike #7 and rides it up
+   *  - "wildride": Grandpappy Zeke asks the sky; the sky picks the direction,
+   *                power and dignity level. Hostile-proof till he lands.
    */
-  airSpecial?: "hook" | "flutter" | "fart" | "jugblast" | "recoil" | "glide" | "bolt";
+  airSpecial?: "hook" | "flutter" | "fart" | "jugblast" | "sputter" | "glide" | "wildride";
   /** Short perk label for the select screen. */
   perkLabel?: string;
   /**
@@ -148,8 +150,8 @@ export const CAST: CastMember[] = [
     bio: "County skeet champ, 9 years runnin'.",
     signatureWeapon: "scattergun",
     speed: 4, puff: 4, jump: 2, luck: 2,
-    airSpecial: "recoil",
-    perkLabel: "RECOIL JUMP",
+    airSpecial: "sputter",
+    perkLabel: "SCATTERGUN SPUTTER",
     rescue: {
       world: 2,
       level: 6,
@@ -211,8 +213,8 @@ export const CAST: CastMember[] = [
     bio: "Struck by lightning 6 times. Likes it.",
     signatureWeapon: "lightnin",
     speed: 2, puff: 5, jump: 2, luck: 3,
-    airSpecial: "bolt",
-    perkLabel: "SEVENTH STRIKE",
+    airSpecial: "wildride",
+    perkLabel: "ACT OF GOD",
     rescue: {
       world: 8,
       level: 9,

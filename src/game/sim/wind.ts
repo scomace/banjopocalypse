@@ -42,7 +42,7 @@ export function regenWind(sim: Sim, p: PlayerState): void {
   p.windTicks++;
   if (p.windTicks >= WIND_REGEN_TICKS) {
     p.windTicks = 0;
-    p.wind++;
+    p.wind = Math.min(WIND_MAX, p.wind + 1);
   }
 }
 
@@ -61,7 +61,7 @@ export function spendWind(sim: Sim, p: PlayerState): boolean {
   if (windExempt(sim)) return true;
   const pan = (p.x / FIELD_W) * 2 - 1;
   if (p.wind > 0) {
-    p.wind--;
+    p.wind = Math.max(0, p.wind - 1);
     if (p.wind <= WIND_STRAIN_AT) {
       emit(sim, { t: "sfx", name: "windStrain", pitch: 1 - p.wind * 0.12, pan });
     }
@@ -70,6 +70,28 @@ export function spendWind(sim: Sim, p: PlayerState): boolean {
   const fires = sim.rng() >= WIND_FAIL_CHANCE;
   if (fires) emit(sim, { t: "sfx", name: "windStrain", pitch: 1.18, pan });
   return fires;
+}
+
+/**
+ * Sip wind for a sustained special (Bobbie Sue's sputter): fractional cost,
+ * and no gassed-out gamble — a dry tank just stops the engine, the caller
+ * hears about it via the false return. Wheezes as each pip line drains past
+ * once the tank is low, so the cliff is heard coming.
+ */
+export function sipWind(sim: Sim, p: PlayerState, cost: number): boolean {
+  if (windExempt(sim)) return true;
+  if (p.wind <= 0) return false;
+  const before = p.wind;
+  p.wind = Math.max(0, p.wind - cost);
+  if (Math.floor(p.wind) < Math.floor(before) && p.wind <= WIND_STRAIN_AT) {
+    emit(sim, {
+      t: "sfx",
+      name: "windStrain",
+      pitch: 1 - p.wind * 0.12,
+      pan: (p.x / FIELD_W) * 2 - 1,
+    });
+  }
+  return true;
 }
 
 /**

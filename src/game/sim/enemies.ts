@@ -21,7 +21,7 @@ import { circleOverlapsBox, groundAhead, moveBody, standingOnGround } from "./ph
 import type { Enemy, Sim } from "./types";
 import { emit, hurtPlayer, score } from "./sim";
 import { spawnFood } from "./items";
-import { stepFlungEnemy } from "./hook";
+import { flingEnemy, stepFlungEnemy } from "./hook";
 
 type Archetype =
   | "walker"
@@ -380,6 +380,19 @@ function liveChecks(sim: Sim, e: Enemy): boolean {
   // player contact
   for (const p of sim.players) {
     if (!p.alive || p.invuln > 0) continue;
+    if (p.wildTicks > 0) {
+      // Zeke mid-wild-ride is a pinball, not a target: the varmint gets
+      // bumped aside (no damage — flingEnemy at power 0 just tumbles it)
+      // and Zeke ricochets. Nobody dies; that's the whole deal.
+      if (
+        e.flung <= 0 &&
+        circleOverlapsBox(e.x, e.y - 12, 16, p.x, p.y, P_WIDTH + 6, P_HEIGHT)
+      ) {
+        flingEnemy(sim, e, p.index, Math.sign(e.x - p.x) || 1, 0.9, 0);
+        p.vx = -p.vx;
+      }
+      continue;
+    }
     if (p.prayer > 0) {
       // prayer glow roasts enemies on contact
       if (circleOverlapsBox(e.x, e.y - 12, 20, p.x, p.y, P_WIDTH + 10, P_HEIGHT)) {

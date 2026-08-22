@@ -219,9 +219,18 @@ export class PlayScene extends Phaser.Scene {
         const lean = -Math.atan2(p.x - hold.ax, p.y - hold.ay) * (180 / Math.PI) * 0.85;
         s.setAngle(Math.max(-32, Math.min(32, lean)));
       } else {
-        // (or the gassed-out stumble: a drunk wobble, legs every which way)
+        // (or Zeke's wild-ride pinwheel — no steering, no dignity — or the
+        // gassed-out stumble's drunk wobble, or Bobbie Sue's engine judder)
         s.setAngle(
-          p.stumbleTicks > 0 ? Math.sin(t * 1.1) * 16 : p.flutterTicks > 0 ? p.facing * 13 : 0,
+          p.wildTicks > 0
+            ? (t * 22) % 360
+            : p.stumbleTicks > 0
+              ? Math.sin(t * 1.1) * 16
+              : p.flutterTicks > 0
+                ? p.facing * 13
+                : p.sputtering
+                  ? Math.sin(t * 1.6) * 5
+                  : 0,
         );
       }
       const animKey = `${texKey}:${p.anim}`;
@@ -230,7 +239,11 @@ export class PlayScene extends Phaser.Scene {
       }
       const blink = p.invuln > 0 && Math.floor(t / 4) % 2 === 0;
       s.setAlpha(blink ? 0.35 : 1);
-      if (p.prayer > 0) {
+      if (p.wildCharge > 0) {
+        // pre-launch crackle: a static flicker while the sky makes its mind up
+        s.setTintFill(0xcfe8ff);
+        if (t % 4 < 2) s.clearTint();
+      } else if (p.prayer > 0) {
         s.setTintFill(0xfff2b0);
         if (t % 6 < 3) s.clearTint();
       } else if (p.frenzy && t % 14 < 3) {

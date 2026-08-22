@@ -45,7 +45,8 @@ export type PlayerState = {
   jumpBuffer: number;
   /** The one-shot air special is spent; wiped every time boots touch ground. */
   airJumpUsed: boolean;
-  /** Air-special stamina pips left (WIND_* in constants; wind.ts). */
+  /** Air-special stamina pips left. Fractional: one-shot bursts spend whole
+   *  pips, Bobbie Sue's sputter sips (WIND_* in constants; wind.ts). */
   wind: number;
   /** Grounded ticks banked toward the next wind pip. */
   windTicks: number;
@@ -55,6 +56,14 @@ export type PlayerState = {
   flutterTicks: number;
   /** Darlene's possum chute is open this tick (slow fall; renderer draws it). */
   gliding: boolean;
+  /** Bobbie Sue's throttle is open: puffs fire on a cadence while JUMP held. */
+  sputtering: boolean;
+  /** Ticks until the next sputter puff. */
+  sputterTick: number;
+  /** Zeke crackling pre-launch; the sky decides when this hits 0. */
+  wildCharge: number;
+  /** Zeke's wild ride: hostile-proof pinball until boots touch ground. */
+  wildTicks: number;
   jumpHeld: boolean;
   blowHeld: boolean;
   blowCooldown: number;

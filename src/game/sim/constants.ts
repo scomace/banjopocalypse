@@ -54,14 +54,28 @@ export const FART_CLOUD_TICKS = 45;
  *  and smashes into a real fire pool. His own moonshine burns him too. */
 export const JUGBLAST_VY = -8.6;
 export const JUGBLAST_JUG_VY = 2.4; // dropped jug's initial fall speed
-/** Bobbie Sue's recoil jump: the scattergun kick IS the jump. */
-export const RECOIL_VY = -8.2;
-export const RECOIL_PELLETS = 5;
+/** Bobbie Sue's sputter: the scattergun putt-putted downward. Unlimited
+ *  presses, finite fuel — each puff sips wind (see sipWind). The clamp is
+ *  tuned so a puff cycle nets a slow SINK (~0.2px/tick): she hovers and
+ *  drifts, she never out-climbs the tier grid. */
+export const SPUTTER_PUFF_TICKS = 9; // cadence while JUMP is held
+export const SPUTTER_VY = -1.4; // puff clamps vy to this
+export const SPUTTER_VX = 0.9; // shove toward facing per puff...
+export const SPUTTER_VX_CAP = 1.5; // ...capped at this x maxSpeed
+export const SPUTTER_PIP_COST = 0.2; // wind per puff (full tank = 25 puffs)
 /** Darlene's possum chute: fall speed while JUMP is held on the way down,
  *  and proper steering — the chute turns on a dime (vs P_AIR_CONTROL 0.42). */
 export const GLIDE_FALL_VY = 2.1;
 export const GLIDE_AIR_CONTROL = 0.9;
-/** Grandpappy Zeke's seventh strike: ride the bolt up, zap the yard. */
+/** Grandpappy Zeke's wild ride: the sky picks the trajectory (weighted
+ *  table in airspecials.ts). He's hostile-proof until boots touch ground —
+ *  you don't steer it, so nothing that happens next is your fault. */
+export const WILD_CHARGE_TICKS = 4; // crackle beat before launch
+export const WILD_RIDE_TICKS = 120; // immunity safety cap; landing clears it
+/** Post-landing mercy: the sky put him down (maybe on spikes), give him a
+ *  beat to get his boots under him before anything can claim the kill. */
+export const WILD_LAND_MERCY_TICKS = 45;
+/** The old seventh strike, demoted to the table's 3% jackpot. */
 export const BOLT_VY = -9.2;
 export const BOLT_RADIUS = 95;
 export const BOLT_DMG = 3;

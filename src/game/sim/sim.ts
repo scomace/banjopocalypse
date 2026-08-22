@@ -61,7 +61,10 @@ import {
   SECOND_POUR_TELEGRAPH_TICKS,
   SPECIAL_FIRST_TICKS,
   SPECIAL_INTERVAL_TICKS,
+  SPUTTER_PIP_COST,
+  SPUTTER_PUFF_TICKS,
   TICK_HZ,
+  WILD_LAND_MERCY_TICKS,
   TILE,
   WIND_MAX,
 } from "./constants";
@@ -92,8 +95,8 @@ import { spawnSpecial, stepSpecialsAndZones } from "./specials";
 import { createBoss, stepBoss } from "./boss";
 import { spawnFood, stepItems } from "./items";
 import { applyHookConstraint, castLine, stepHookBody, stepHookControl } from "./hook";
-import { fireAirSpecial } from "./airspecials";
-import { refillWind, regenWind, spendWind, stumble } from "./wind";
+import { fireAirSpecial, launchWildRide, sputterPuff } from "./airspecials";
+import { refillWind, regenWind, sipWind, spendWind, stumble } from "./wind";
 import { createShrine, nagShrine, shrineHoldsLevel, stepShrine } from "./shrine";
 import { createCage, hitCage, stepCage, touchesCage } from "./cage";
 
@@ -149,6 +152,10 @@ export function createSim(cfg: SimConfig): Sim {
       stumbleTicks: 0,
       flutterTicks: 0,
       gliding: false,
+      sputtering: false,
+      sputterTick: 0,
+      wildCharge: 0,
+      wildTicks: 0,
       jumpHeld: false,
       blowHeld: false,
       blowCooldown: 0,
@@ -354,9 +361,16 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
         castLine(sim, p);
         p.jumpBuffer = 0;
       }
+    } else if (airSpecial === "sputter") {
+      // Bobbie Sue opens the throttle: puffs fire on a cadence while JUMP
+      // stays held (the putt-putt loop below gravity). Re-pressable forever
+      // — the limit is fuel, not the press, so airJumpUsed never gates her.
+      p.sputtering = true;
+      p.sputterTick = 0;
+      p.jumpBuffer = 0;
     } else if (airSpecial !== "glide" && !p.airJumpUsed) {
-      // glide is hold-driven (see the chute clamp below), everything else
-      // is a one-shot burst
+      // glide and sputter are hold-driven (the clamps below), everything
+      // else is a one-shot burst
       p.airJumpUsed = true;
       p.jumpBuffer = 0;
       // ...and it costs wind: one roll per airtime, a gassed-out whiff
@@ -365,14 +379,30 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
       else stumble(sim, p, airSpecial);
     }
   }
-  // variable jump height (a Fishin' Line launch or head bounce is not a
-  // jump: leave those be)
-  if (!jump && p.vy < P_JUMP_CUT_VY && !swinging && p.hookKick <= 0 && p.pvpLaunch <= 0) {
+  // variable jump height (a Fishin' Line launch, a head bounce or the sky's
+  // wild ride is not a jump: leave those be)
+  if (
+    !jump &&
+    p.vy < P_JUMP_CUT_VY &&
+    !swinging &&
+    p.hookKick <= 0 &&
+    p.pvpLaunch <= 0 &&
+    p.wildTicks <= 0
+  ) {
     p.vy = P_JUMP_CUT_VY;
   }
 
   // gravity
   p.vy = Math.min(p.vy + P_GRAVITY, P_MAX_FALL);
+
+  // Zeke's pre-launch crackle: held in the air for a beat, then the sky
+  // decides (launchWildRide rolls the table; wildTicks rides it out)
+  if (p.wildCharge > 0) {
+    p.vx *= 0.8;
+    p.vy = 0;
+    p.wildCharge--;
+    if (p.wildCharge === 0) launchWildRide(sim, p);
+  }
 
   // Darlene's possum chute: hold JUMP on the way down to drift, let go to drop
   const wasGliding = p.gliding;
@@ -381,6 +411,26 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   if (p.gliding) {
     p.vy = Math.min(p.vy, GLIDE_FALL_VY);
     if (!wasGliding) emit(sim, { t: "sfx", name: "possum", pitch: 1.3 });
+  }
+
+  // Bobbie Sue's sputter: the scattergun putt-putts downward while JUMP is
+  // held — every puff is a real pellet and a sip of wind (sputterPuff /
+  // sipWind). Release, land or swing and the engine stops; the tank is the
+  // only hard limit.
+  p.sputtering =
+    p.sputtering && airSpecial === "sputter" && !p.grounded && !swinging && jump && p.pvpLaunch <= 0;
+  if (p.sputtering) {
+    p.sputterTick--;
+    if (p.sputterTick <= 0) {
+      if (sipWind(sim, p, SPUTTER_PIP_COST)) {
+        p.sputterTick = SPUTTER_PUFF_TICKS;
+        sputterPuff(sim, p);
+      } else {
+        // the tank ran dry mid-hover: the engine coughs out
+        p.sputtering = false;
+        emit(sim, { t: "sfx", name: "windFail", pitch: 1.3, pan: (p.x / FIELD_W) * 2 - 1 });
+      }
+    }
   }
 
   // bubble riding/bouncing: check before tile move (bubbles are soft floors)
@@ -498,6 +548,14 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   // invuln / prayer / bounce timers
   if (p.invuln > 0) p.invuln--;
   if (p.prayer > 0) p.prayer--;
+  // the wild ride ends the tick boots touch ground (or at the safety cap),
+  // with a beat of mercy — the sky may well have parked him on spikes
+  if (p.wildTicks > 0) {
+    if (p.grounded) {
+      p.wildTicks = 0;
+      p.invuln = Math.max(p.invuln, WILD_LAND_MERCY_TICKS);
+    } else p.wildTicks--;
+  }
   if (p.pvpLaunch > 0) p.pvpLaunch--;
   if (p.squash > 0) p.squash--;
   if (p.flutterTicks > 0) {
@@ -557,7 +615,7 @@ function stepHeadBounce(sim: Sim, p: PlayerState): void {
 }
 
 export function hurtPlayer(sim: Sim, p: PlayerState): void {
-  if (p.invuln > 0 || p.prayer > 0 || !p.alive) return;
+  if (p.invuln > 0 || p.prayer > 0 || p.wildTicks > 0 || !p.alive) return;
   if (p.hogFatCharge) {
     p.hogFatCharge = false;
     p.invuln = P_INVULN_TICKS;
