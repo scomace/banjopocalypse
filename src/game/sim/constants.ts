@@ -54,11 +54,13 @@ export const FART_CLOUD_TICKS = 45;
  *  and smashes into a real fire pool. His own moonshine burns him too. */
 export const JUGBLAST_VY = -8.6;
 export const JUGBLAST_JUG_VY = 2.4; // dropped jug's initial fall speed
-/** Bobbie Sue's sputter: the scattergun putt-putted downward. Unlimited
- *  presses, finite fuel — each puff sips wind (see sipWind). The clamp is
- *  tuned so a puff cycle nets a slow SINK (~0.2px/tick): she hovers and
- *  drifts, she never out-climbs the tier grid. */
-export const SPUTTER_PUFF_TICKS = 9; // cadence while JUMP is held
+/** Bobbie Sue's sputter: every JUMP press midair is one putt of the
+ *  scattergun — the MASH is the throttle. Unlimited presses, finite fuel:
+ *  each puff sips wind (see sipWind). The cooldown is the climb-proofing:
+ *  at a perfect mash (a puff every 8 ticks) the clamp + gravity net exactly
+ *  zero, so flawless mashing hovers level and anything slower sinks — she
+ *  can never out-climb the tier grid, autofire included. */
+export const SPUTTER_COOLDOWN_TICKS = 8; // min gap; faster presses are eaten free
 export const SPUTTER_VY = -1.4; // puff clamps vy to this
 export const SPUTTER_VX = 0.9; // shove toward facing per puff...
 export const SPUTTER_VX_CAP = 1.5; // ...capped at this x maxSpeed

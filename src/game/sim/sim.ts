@@ -61,8 +61,8 @@ import {
   SECOND_POUR_TELEGRAPH_TICKS,
   SPECIAL_FIRST_TICKS,
   SPECIAL_INTERVAL_TICKS,
+  SPUTTER_COOLDOWN_TICKS,
   SPUTTER_PIP_COST,
-  SPUTTER_PUFF_TICKS,
   TICK_HZ,
   WILD_LAND_MERCY_TICKS,
   TILE,
@@ -152,7 +152,6 @@ export function createSim(cfg: SimConfig): Sim {
       stumbleTicks: 0,
       flutterTicks: 0,
       gliding: false,
-      sputtering: false,
       sputterTick: 0,
       wildCharge: 0,
       wildTicks: 0,
@@ -362,15 +361,19 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
         p.jumpBuffer = 0;
       }
     } else if (airSpecial === "sputter") {
-      // Bobbie Sue opens the throttle: puffs fire on a cadence while JUMP
-      // stays held (the putt-putt loop below gravity). Re-pressable forever
-      // — the limit is fuel, not the press, so airJumpUsed never gates her.
-      p.sputtering = true;
-      p.sputterTick = 0;
+      // Bobbie Sue: every press is one putt of the scattergun — the mash is
+      // the throttle, so airJumpUsed never gates her. The cooldown eats
+      // presses faster than a puff every SPUTTER_COOLDOWN_TICKS (free), and
+      // a press on a dry tank just clicks.
       p.jumpBuffer = 0;
+      if (p.sputterTick <= 0) {
+        p.sputterTick = SPUTTER_COOLDOWN_TICKS;
+        if (sipWind(sim, p, SPUTTER_PIP_COST)) sputterPuff(sim, p);
+        else emit(sim, { t: "sfx", name: "windFail", pitch: 1.3, pan: (p.x / FIELD_W) * 2 - 1 });
+      }
     } else if (airSpecial !== "glide" && !p.airJumpUsed) {
-      // glide and sputter are hold-driven (the clamps below), everything
-      // else is a one-shot burst
+      // glide is hold-driven (the chute clamp below), everything else is a
+      // one-shot burst
       p.airJumpUsed = true;
       p.jumpBuffer = 0;
       // ...and it costs wind: one roll per airtime, a gassed-out whiff
@@ -413,25 +416,6 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
     if (!wasGliding) emit(sim, { t: "sfx", name: "possum", pitch: 1.3 });
   }
 
-  // Bobbie Sue's sputter: the scattergun putt-putts downward while JUMP is
-  // held — every puff is a real pellet and a sip of wind (sputterPuff /
-  // sipWind). Release, land or swing and the engine stops; the tank is the
-  // only hard limit.
-  p.sputtering =
-    p.sputtering && airSpecial === "sputter" && !p.grounded && !swinging && jump && p.pvpLaunch <= 0;
-  if (p.sputtering) {
-    p.sputterTick--;
-    if (p.sputterTick <= 0) {
-      if (sipWind(sim, p, SPUTTER_PIP_COST)) {
-        p.sputterTick = SPUTTER_PUFF_TICKS;
-        sputterPuff(sim, p);
-      } else {
-        // the tank ran dry mid-hover: the engine coughs out
-        p.sputtering = false;
-        emit(sim, { t: "sfx", name: "windFail", pitch: 1.3, pan: (p.x / FIELD_W) * 2 - 1 });
-      }
-    }
-  }
 
   // bubble riding/bouncing: check before tile move (bubbles are soft floors)
   if (p.vy > 0 && !swinging) {
@@ -548,6 +532,7 @@ function stepPlayer(sim: Sim, p: PlayerState, cmd: number, prevCmd: number): voi
   // invuln / prayer / bounce timers
   if (p.invuln > 0) p.invuln--;
   if (p.prayer > 0) p.prayer--;
+  if (p.sputterTick > 0) p.sputterTick--;
   // the wild ride ends the tick boots touch ground (or at the safety cap),
   // with a beat of mercy — the sky may well have parked him on spikes
   if (p.wildTicks > 0) {

@@ -23,8 +23,9 @@ export type CastMember = {
    *                scramble that keeps his momentum and boosts it
    *  - "fart":     Granny Mae's bean-powered sideways scoot
    *  - "jugblast": Cooter belches lit moonshine downward: rocket up, singe below
-   *  - "sputter":  Bobbie Sue putt-putts the scattergun downward: unlimited
-   *                presses, finite wind — a hover-and-drift on a rain of pellets
+   *  - "sputter":  Bobbie Sue putt-putts the scattergun downward, one putt
+   *                per JUMP press — mash to hover and drift on a rain of
+   *                pellets; unlimited presses, finite wind
    *  - "glide":    Darlene's possum stretches into a chute; hold JUMP to drift
    *  - "wildride": Grandpappy Zeke asks the sky; the sky picks the direction,
    *                power and dignity level. Hostile-proof till he lands.

@@ -3,8 +3,8 @@
 // calls fireAirSpecial once per airtime. Three specials are NOT one-shot
 // bursts and only partly live here: Buford's hook (hook.ts, hold-to-swing),
 // Darlene's possum chute (the glide clamp in stepPlayer, hold-to-drift) and
-// Bobbie Sue's sputter (the putt-putt loop in stepPlayer; sputterPuff below
-// is the per-puff physics).
+// Bobbie Sue's sputter (mash-to-puff, one press = one putt, gated in
+// stepPlayer; sputterPuff below is the per-puff physics).
 //
 // Attack specials ride the REAL systems, not bespoke damage loops: Cooter
 // drops an actual jug (contact hits + fire pool on smash), Bobbie Sue's
@@ -132,9 +132,10 @@ export function fireAirSpecial(
 
 // ------------------------------------------------------------ Bobbie Sue
 /**
- * One putt of the scattergun (stepPlayer fires these on a cadence while
- * JUMP is held and the tank has wind): a token of lift tuned to a slow
- * net SINK, a shove the way she's facing, and a real pellet out the muzzle.
+ * One putt of the scattergun (stepPlayer fires one per JUMP press midair,
+ * cooldown-gated): a token of lift — perfect mashing hovers level, slower
+ * mashing sinks — a shove the way she's facing, and a real pellet out the
+ * muzzle.
  */
 export function sputterPuff(sim: Sim, p: PlayerState): void {
   p.vy = Math.min(p.vy, SPUTTER_VY);

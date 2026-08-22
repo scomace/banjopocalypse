@@ -228,7 +228,7 @@ export class PlayScene extends Phaser.Scene {
               ? Math.sin(t * 1.1) * 16
               : p.flutterTicks > 0
                 ? p.facing * 13
-                : p.sputtering
+                : p.sputterTick > 0
                   ? Math.sin(t * 1.6) * 5
                   : 0,
         );

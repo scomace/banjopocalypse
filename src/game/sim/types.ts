@@ -56,9 +56,8 @@ export type PlayerState = {
   flutterTicks: number;
   /** Darlene's possum chute is open this tick (slow fall; renderer draws it). */
   gliding: boolean;
-  /** Bobbie Sue's throttle is open: puffs fire on a cadence while JUMP held. */
-  sputtering: boolean;
-  /** Ticks until the next sputter puff. */
+  /** Sputter cooldown: ticks until Bobbie Sue's next press can puff (also
+   *  the renderer's engine-judder window). */
   sputterTick: number;
   /** Zeke crackling pre-launch; the sky decides when this hits 0. */
   wildCharge: number;
