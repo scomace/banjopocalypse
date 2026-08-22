@@ -152,7 +152,7 @@ export const CAST: CastMember[] = [
     signatureWeapon: "scattergun",
     speed: 4, puff: 4, jump: 2, luck: 2,
     airSpecial: "sputter",
-    perkLabel: "SCATTERGUN SPUTTER",
+    perkLabel: "CORNHOLIO SPUTTER",
     rescue: {
       world: 2,
       level: 6,

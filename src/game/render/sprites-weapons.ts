@@ -80,27 +80,27 @@ const ICON_JUG: PixelSprite = {
   ],
 };
 
-// Ol' Scattergun: side-by-side barrels over a walnut stock.
+// Cornholio: an ear of corn, kernels up, husk leaves peeled back at the base.
 const ICON_SCATTERGUN: PixelSprite = {
-  palette: { k: INK, m: "#6a6a72", s: "#9a9aa4", b: "#7a3b1e", d: "#4e2410", w: HI },
+  palette: { k: INK, y: "#f2c230", o: "#d89a18", g: "#4fa33a", d: "#2f6e24", w: HI },
   frames: [
     [
       "................",
-      "................",
-      "................",
-      "..kkkkkkkkkkkkk.",
-      ".kssssssssssssmk",
-      ".kmmmmmmmmmmmmmk",
-      ".kssssssssssssmk",
-      "..kkkkkkkkkkkkk.",
-      "..kbbkk.........",
-      ".kbbbbk.........",
-      ".kbbbddk........",
-      "kbbbdddk........",
-      "kbbddddk........",
-      "kdddddk.........",
-      ".kkkkk..........",
-      "................",
+      "......kkkk......",
+      ".....kyyyyk.....",
+      "....kyywyyyk....",
+      "....kyoyyoyk....",
+      "....kyyoyyok....",
+      "....kyoyyoyk....",
+      "...kgkyoyykgk...",
+      "..kggkyyoykggk..",
+      ".kgggkyoyykgggk.",
+      ".kgggkkyykkgggk.",
+      ".kdgggkkkkgggdk.",
+      "..kdggggggggdk..",
+      "...kddggggddk...",
+      "....kkddddkk....",
+      "......kkkk......",
     ],
   ],
 };

@@ -32,7 +32,7 @@ export const WEAPONS: WeaponDef[] = [
   { id: "goodbook", name: "Granny's Good Book", evolvedName: "King James Cyclone", desc: "Bibles orbit and smite.", evolveTonic: "spectacles" },
   { id: "twang", name: "Twang Wave", evolvedName: "Duelin' Banjos", desc: "Banjo chord shockwaves.", evolveTonic: "pickinfinger" },
   { id: "jug", name: "Moonshine Jug", evolvedName: "White Lightning", desc: "Lobbed jars, fire pools.", evolveTonic: "rocketfuel" },
-  { id: "scattergun", name: "Ol' Scattergun", evolvedName: "Boomstick Bertha", desc: "Auto-blasts the nearest varmint.", evolveTonic: "grit" },
+  { id: "scattergun", name: "Cornholio", evolvedName: "Boomstick Bertha", desc: "Auto-blasts the nearest varmint.", evolveTonic: "grit" },
   { id: "possum", name: "Possum Posse", evolvedName: "Possum Stampede", desc: "Possums patrol and bite.", evolveTonic: "rabbitfoot" },
   { id: "jawharp", name: "Jaw Harp Boinger", evolvedName: "Boingpocalypse", desc: "Ricochetin' twang bolts.", evolveTonic: "lungbutter" },
   { id: "washboard", name: "Washboard Scrub", evolvedName: "Washboard Abs", desc: "Scrub 'em raw up close.", evolveTonic: "hogfat" },
