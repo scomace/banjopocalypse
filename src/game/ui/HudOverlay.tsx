@@ -66,8 +66,11 @@ export function HudOverlay({ controller }: { controller: ControllerLike }) {
             const gassed = simP.wind <= 0;
             const blink = gassed && Math.floor(now / 180) % 2 === 0;
             windEl.querySelectorAll<HTMLElement>("[data-windpip]").forEach((el, wi) => {
-              const lit = wi < simP.wind;
-              el.style.opacity = lit ? "1" : blink ? "0.7" : "0.3";
+              // wind is fractional (Bobbie Sue's sputter sips it): the pip
+              // being drained dims smoothly instead of snapping off
+              const fill = Math.max(0, Math.min(1, simP.wind - wi));
+              el.style.opacity =
+                fill >= 1 ? "1" : fill > 0 ? (0.3 + fill * 0.7).toFixed(2) : blink ? "0.7" : "0.3";
               el.style.background = gassed ? "#ff6b6b" : "#8fe3ff";
             });
           }

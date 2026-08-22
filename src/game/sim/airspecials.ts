@@ -1,14 +1,16 @@
-// The kinfolk's one-shot air specials: what the second JUMP press does
-// midair. stepPlayer gates the press (airborne, not swinging, special
-// unspent) and calls fireAirSpecial once per airtime. Two specials do NOT
-// live here because they aren't one-shot bursts: Buford's hook (hook.ts,
-// hold-to-swing) and Darlene's possum chute (the glide clamp in stepPlayer,
-// hold-to-drift).
+// The kinfolk's air specials: what the second JUMP press does midair.
+// stepPlayer gates the press (airborne, not swinging, special unspent) and
+// calls fireAirSpecial once per airtime. Three specials are NOT one-shot
+// bursts and only partly live here: Buford's hook (hook.ts, hold-to-swing),
+// Darlene's possum chute (the glide clamp in stepPlayer, hold-to-drift) and
+// Bobbie Sue's sputter (mash-to-puff, one press = one putt, gated in
+// stepPlayer; sputterPuff below is the per-puff physics).
 //
 // Attack specials ride the REAL systems, not bespoke damage loops: Cooter
-// drops an actual jug (contact hits + fire pool on smash), Bobbie Sue fires
-// actual pellets, Zeke's strike is an actual chaining bolt — so they all
-// inherit projectile rendering, boss chipping, and score attribution.
+// drops an actual jug (contact hits + fire pool on smash), Bobbie Sue's
+// puffs fire actual pellets, Zeke's jackpot is an actual chaining bolt — so
+// they all inherit projectile rendering, boss chipping, and score
+// attribution.
 //
 // Pure sim: no Phaser, no DOM.
 
@@ -31,9 +33,12 @@ import {
   JUGBLAST_VY,
   P_AIR_JUMP_MULT,
   P_HEIGHT,
-  RECOIL_PELLETS,
-  RECOIL_VY,
+  SPUTTER_VX,
+  SPUTTER_VX_CAP,
+  SPUTTER_VY,
   TICK_HZ,
+  WILD_CHARGE_TICKS,
+  WILD_RIDE_TICKS,
 } from "./constants";
 import type { PlayerState, Sim } from "./types";
 import { emit } from "./sim";
@@ -109,72 +114,12 @@ export function fireAirSpecial(
       emit(sim, { t: "burst", text: "FWOOSH!", x: p.x, y: p.y + 22, palette: "Inferno" });
       break;
     }
-    case "recoil": {
-      // Bobbie Sue: the scattergun fired straight down — the kick is the
-      // jump, the pellets are real pellets, and she visibly shoulders it.
-      p.vy = RECOIL_VY;
-      p.anim = "blow";
-      p.animLock = 12;
-      for (let i = 0; i < RECOIL_PELLETS; i++) {
-        const a = Math.PI / 2 + (i - (RECOIL_PELLETS - 1) / 2) * 0.22;
-        sim.projectiles.push({
-          id: sim.nextId++,
-          kind: "pellet",
-          hostile: false,
-          owner: p.index,
-          x: p.x,
-          y: p.y - P_HEIGHT * 0.4,
-          vx: Math.cos(a) * 6.4,
-          vy: Math.sin(a) * 6.4,
-          ticks: 40,
-          data: 0,
-          power: 2,
-        });
-      }
-      emit(sim, { t: "sfx", name: "scattergun" });
-      break;
-    }
-    case "bolt": {
-      // Grandpappy Zeke: strikes one through six were luck; the seventh is
-      // on demand. The shockwave zaps the yard, a real bolt cracks down on
-      // his position and chains to the next varmint over, and a boss in
-      // range takes the jolt too.
-      p.vy = BOLT_VY;
-      for (const e of sim.enemies) {
-        if (e.phase.kind !== "normal") continue;
-        const d2 = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
-        if (d2 < BOLT_RADIUS * BOLT_RADIUS) {
-          e.hp -= BOLT_DMG;
-          e.hitFlash = 10;
-          if (e.hp <= 0) killEnemyByWeapon(sim, e, p.index, 0);
-        }
-      }
-      const boss = sim.boss;
-      if (boss && !boss.dead && boss.invuln <= 0) {
-        const d = Math.hypot(boss.x - p.x, boss.y - p.y);
-        if (d < BOLT_RADIUS + 60) {
-          boss.hp -= BOLT_DMG;
-          boss.hitFlash = 8;
-          emit(sim, { t: "sfx", name: "bossHit" });
-        }
-      }
-      sim.projectiles.push({
-        id: sim.nextId++,
-        kind: "bolt",
-        hostile: false,
-        owner: p.index,
-        x: p.x,
-        y: p.y - 20,
-        vx: 0,
-        vy: 0,
-        ticks: 14,
-        data: 1, // one chain jump
-        power: 2,
-      });
-      emit(sim, { t: "sfx", name: "boltHit", pitch: 0.9 });
-      emit(sim, { t: "flash", color: 0xcfe8ff });
-      emit(sim, { t: "shake", power: 2 });
-      emit(sim, { t: "burst", text: "SEVENTH STRIKE!", x: p.x, y: p.y - P_HEIGHT - 14, palette: "Electric" });
+    case "wildride": {
+      // Grandpappy Zeke: the sky owes him one, but nobody said which one.
+      // A beat of crackle (stepPlayer holds him still), then launchWildRide
+      // rolls the table below.
+      p.wildCharge = WILD_CHARGE_TICKS;
+      emit(sim, { t: "sfx", name: "charge", pitch: 1.4 });
       break;
     }
     default: {
@@ -183,4 +128,129 @@ export function fireAirSpecial(
       emit(sim, { t: "sfx", name: "jump", pitch: 1.18 });
     }
   }
+}
+
+// ------------------------------------------------------------ Bobbie Sue
+/**
+ * One putt of the scattergun (stepPlayer fires one per JUMP press midair,
+ * cooldown-gated): a token of lift — perfect mashing hovers level, slower
+ * mashing sinks — a shove the way she's facing, and a real pellet out the
+ * muzzle.
+ */
+export function sputterPuff(sim: Sim, p: PlayerState): void {
+  p.vy = Math.min(p.vy, SPUTTER_VY);
+  const cap = p.maxSpeed * SPUTTER_VX_CAP;
+  p.vx = Math.max(-cap, Math.min(cap, p.vx + p.facing * SPUTTER_VX));
+  p.anim = "blow";
+  p.animLock = 6;
+  sim.projectiles.push({
+    id: sim.nextId++,
+    kind: "pellet",
+    hostile: false,
+    owner: p.index,
+    x: p.x,
+    y: p.y - P_HEIGHT * 0.3,
+    vx: (sim.rng() - 0.5) * 1.6,
+    vy: 6.4,
+    ticks: 40,
+    data: 0,
+    power: 2,
+  });
+  emit(sim, {
+    t: "sfx",
+    name: "scattergun",
+    pitch: 1.45 + sim.rng() * 0.2,
+    pan: (p.x / FIELD_W) * 2 - 1,
+  });
+}
+
+// ------------------------------------------------------------ Zeke
+/**
+ * Zeke's slot machine. Weights are integer percents (sum 100). Every launch
+ * burns exactly three rng draws — row, direction, jitter — whatever the row
+ * lands, so lockstep peers and replays stay in phase. The Dud is what makes
+ * the Big One funny; Seventh Strike is the old bolt, demoted to jackpot.
+ */
+const WILD_TABLE = [
+  { key: "dud", w: 15, vx: 0, vy: -1.5, text: "...HUH.", sfx: "windFail", pitch: 0.8 },
+  { key: "sideways", w: 22, vx: 8.8, vy: -1.0, text: "WHOA NELLY!", sfx: "boing", pitch: 0.9 },
+  { key: "corkscrew", w: 20, vx: 5.0, vy: -6.0, text: "WHICHAWAY?!", sfx: "boing", pitch: 1.15 },
+  { key: "moonshot", w: 15, vx: 0.8, vy: -13.0, text: "MOON SHOT!", sfx: "boom", pitch: 1.5 },
+  { key: "faceplant", w: 12, vx: 1.5, vy: 9.0, text: "OH NO.", sfx: "boing", pitch: 0.6 },
+  { key: "bigone", w: 13, vx: 8.5, vy: -9.0, text: "YEEEEHAW!", sfx: "boom", pitch: 1.2 },
+  { key: "seventh", w: 3, vx: 0, vy: BOLT_VY, text: "SEVENTH STRIKE!", sfx: "boltHit", pitch: 0.9 },
+] as const;
+
+/** The crackle ended: roll the table and let fly (stepPlayer calls this). */
+export function launchWildRide(sim: Sim, p: PlayerState): void {
+  // three draws, always, so the rng stream length never depends on the row
+  const rRow = sim.rng();
+  const rDir = sim.rng();
+  const rJit = sim.rng();
+  let row: (typeof WILD_TABLE)[number] = WILD_TABLE[0];
+  let acc = 0;
+  const target = rRow * 100;
+  for (const r of WILD_TABLE) {
+    acc += r.w;
+    if (target < acc) {
+      row = r;
+      break;
+    }
+  }
+  const dir = rDir < 0.5 ? -1 : 1;
+  const jit = 0.9 + rJit * 0.2;
+  p.vx = dir * row.vx * jit;
+  p.vy = row.vy * jit;
+  if (p.vx !== 0) p.facing = p.vx < 0 ? -1 : 1;
+  p.grounded = false;
+  p.wildTicks = WILD_RIDE_TICKS;
+  if (row.key === "seventh") fireSeventhStrike(sim, p);
+  if (row.key === "dud") emit(sim, { t: "balloon", player: p.index, trigger: "wildride" });
+  emit(sim, { t: "sfx", name: row.sfx, pitch: row.pitch, pan: (p.x / FIELD_W) * 2 - 1 });
+  emit(sim, {
+    t: "burst",
+    text: row.text,
+    x: p.x,
+    y: p.y - P_HEIGHT - 12,
+    big: row.key === "seventh" || row.key === "bigone",
+    palette: row.key === "seventh" ? "Electric" : undefined,
+  });
+}
+
+/** The jackpot: the old seventh strike, exactly as it was. Zaps the yard,
+ *  chains a real bolt, jolts a boss in range. */
+function fireSeventhStrike(sim: Sim, p: PlayerState): void {
+  for (const e of sim.enemies) {
+    if (e.phase.kind !== "normal") continue;
+    const d2 = (e.x - p.x) * (e.x - p.x) + (e.y - p.y) * (e.y - p.y);
+    if (d2 < BOLT_RADIUS * BOLT_RADIUS) {
+      e.hp -= BOLT_DMG;
+      e.hitFlash = 10;
+      if (e.hp <= 0) killEnemyByWeapon(sim, e, p.index, 0);
+    }
+  }
+  const boss = sim.boss;
+  if (boss && !boss.dead && boss.invuln <= 0) {
+    const d = Math.hypot(boss.x - p.x, boss.y - p.y);
+    if (d < BOLT_RADIUS + 60) {
+      boss.hp -= BOLT_DMG;
+      boss.hitFlash = 8;
+      emit(sim, { t: "sfx", name: "bossHit" });
+    }
+  }
+  sim.projectiles.push({
+    id: sim.nextId++,
+    kind: "bolt",
+    hostile: false,
+    owner: p.index,
+    x: p.x,
+    y: p.y - 20,
+    vx: 0,
+    vy: 0,
+    ticks: 14,
+    data: 1, // one chain jump
+    power: 2,
+  });
+  emit(sim, { t: "flash", color: 0xcfe8ff });
+  emit(sim, { t: "shake", power: 2 });
 }

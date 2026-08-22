@@ -469,6 +469,12 @@ const PER_CAST: Record<string, BarkPool> = {
       "Tell the sky... we're square...",
     ],
     revive: ["Jump started. Let's ride."],
+    wildride: [
+      "I meant to do that.",
+      "Sky's feelin' ornery today.",
+      "That warn't seven.",
+      "Dang static.",
+    ],
     idle: [
       "My knee says rain. My other knee says RUN.",
       "Hair's standin' up. That's either fear or weather.",
